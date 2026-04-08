@@ -26,34 +26,17 @@ NOTE_TYPES = {
     "Mind Map (Diagram Style)":     "Topic breakdown in hierarchical structure",
 }
 
-NOTES_PROMPT = """You are an expert MP Board study notes creator for {cls} students.
-
-Create **{note_type}** for:
-- Class: {cls}
-- Subject: {subject}
-- Chapter/Topic: {topic}
-- Language: {medium}
-
-{type_instruction}
-
-Format requirements:
-- Use proper headings (##, ###)
-- Use bullet points and numbered lists
-- Highlight key terms with **bold**
-- For Science/Math: include all important formulas in a formula box (use ``` code blocks)
-- For History/Geography: include important dates, names, places clearly
-- For Hindi/Sanskrit: include definitions, examples, and literary terms clearly
-- End with a "Remember / Yaad Rakho" box with the 5 most important points
-
-Write in {medium_lang}. Make notes board-exam focused for MP Board students."""
-
 TYPE_INSTRUCTIONS = {
-    "Summary Notes (Saar)":         "Create a concise 400-600 word summary covering all major concepts.",
-    "Detailed Notes (Vistrit)":     "Create comprehensive notes (800-1200 words) with detailed explanations, examples, and all sub-topics.",
-    "Formula Sheet (Sutre)":        "List ALL formulas, definitions, key terms, and important facts. Use tables where appropriate.",
-    "Revision Notes (Revision)":    "Create quick bullet-point revision notes. Each point should be short (1-2 lines). Focus on what examiners ask.",
-    "Mind Map (Diagram Style)":     "Create a hierarchical text-based mind map using indentation. Show how topics connect to sub-topics.",
+    "Summary Notes (Saar)":      "concise 300-400 word summary of all major concepts",
+    "Detailed Notes (Vistrit)":  "comprehensive notes with explanations, examples, sub-topics (600-800 words)",
+    "Formula Sheet (Sutre)":     "only formulas, definitions, key terms — use tables where helpful",
+    "Revision Notes (Revision)": "bullet-point revision notes, 1-line each, exam-focused",
+    "Mind Map (Diagram Style)":  "hierarchical text mind map using indentation",
 }
+
+NOTES_PROMPT = """MP Board {cls} {subject} — create {note_type} for topic: {topic}.
+Instructions: {type_instruction}. Language: {medium_lang}.
+Use ## headings, **bold** key terms, ``` for formulas. End with 'Yaad Rakho' (5 key points)."""
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -72,11 +55,11 @@ def stream_notes(client, cls, subject, topic, note_type, medium):
         medium_lang=medium_lang,
         type_instruction=TYPE_INSTRUCTIONS.get(note_type, "")
     )
+    max_tok = 800 if "Summary" in note_type or "Revision" in note_type or "Formula" in note_type else 1400
     with client.messages.stream(
-        model="claude-opus-4-6",
-        max_tokens=3000,
+        model="claude-haiku-4-5",
+        max_tokens=max_tok,
         messages=[{"role": "user", "content": prompt}],
-        thinking={"type": "adaptive"},
     ) as stream:
         for text in stream.text_stream:
             yield text

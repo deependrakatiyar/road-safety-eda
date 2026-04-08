@@ -18,21 +18,10 @@ SUBJECTS = {
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
 
-SYSTEM_PROMPT = """You are **Padhai AI**, a friendly and expert AI tutor for MP Board (Madhya Pradesh Board of Secondary Education) school students from Class 6 to Class 12.
-
-Your role:
-- Answer questions clearly and step-by-step
-- Use simple language appropriate for the student's class level
-- If the student writes in Hindi (Devanagari script), respond in Hindi. If in English, respond in English.
-- Always relate explanations to the MP Board curriculum and textbook content
-- For Mathematics and Science, show step-by-step solutions with proper working
-- Use examples from everyday Indian life to make concepts relatable
-- Be encouraging, patient, and motivating like a good teacher
-- For formulae, definitions, and key points — highlight them clearly
-- When explaining diagrams (Biology, Geography, Physics), describe them clearly in words
-
-Always mention the class and subject context in your explanations.
-End responses with a small encouraging message or a follow-up question to check understanding."""
+SYSTEM_PROMPT = """You are Padhai AI, an MP Board tutor (Class 6-12).
+- Answer in Hindi if student writes in Hindi, else English.
+- Step-by-step explanations; bold key terms and formulas.
+- Keep answers concise but complete. End with one follow-up question."""
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,19 +37,19 @@ def build_user_message(question: str, cls: str, subject: str, medium: str) -> st
     return f"[{cls} | {subject} | {medium}] {lang_note}\n\nMera sawal hai / My question is:\n{question}"
 
 
+MAX_HISTORY = 6  # keep last 3 pairs to limit input tokens
+
 def stream_response(client, messages: list) -> str:
-    full_response = ""
+    # Trim history: always keep first (context) msg + last MAX_HISTORY msgs
+    trimmed = messages[-MAX_HISTORY:] if len(messages) > MAX_HISTORY else messages
     with client.messages.stream(
-        model="claude-opus-4-6",
-        max_tokens=2048,
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
         system=SYSTEM_PROMPT,
-        messages=messages,
-        thinking={"type": "adaptive"},
+        messages=trimmed,
     ) as stream:
         for text in stream.text_stream:
-            full_response += text
             yield text
-    return full_response
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 

@@ -27,45 +27,22 @@ QUESTION_TYPES = {
     "Numerical / Practical Problems":     "Calculation-based and application problems (for Science, Math)",
 }
 
-IMP_Q_PROMPT = """You are an expert MP Board (Madhya Pradesh Board of Secondary Education) exam preparation specialist.
-
-Generate important questions for MP Board exam for:
-- Class: {cls}
-- Subject: {subject}
-- Chapter/Topic: {topic}
-- Question Type: {q_type}
-- Language: {medium}
-
-Instructions:
-1. Generate questions that are MOST LIKELY to appear in MP Board exams
-2. Base questions on previous years' MP Board exam patterns
-3. Include questions from all important sub-topics of the chapter
-4. {type_instruction}
-5. Write in {medium_lang}
-6. For each question, also provide:
-   - **Marks** it carries
-   - **Hints** (2-3 line answer hint for student reference)
-   - **Importance** level: ⭐ Important / ⭐⭐ Very Important / ⭐⭐⭐ Most Important
-
-Format each question clearly:
-
----
-**Q[Number]. [Question text]** [Marks]
-[Importance level]
-💡 **Hint:** [Answer hint]
----
-
-Group questions by marks/type. Start with most important questions.
-Generate at least 15-20 questions total."""
-
 TYPE_INSTRUCTIONS = {
-    "All Types (Sabhi)":                  "Mix all types: objective, short answer, long answer, and numerical",
-    "1 Mark (Objective)":                 "Focus on definitions, facts, fill in the blanks, true/false, one-word answers",
-    "2-3 Mark (Short Answer)":            "Focus on explain, describe, differentiate type questions",
-    "4-5 Mark (Long Answer)":             "Focus on explain with diagram, describe in detail, compare and contrast",
-    "Essay / Nibandh (6-8 Marks)":        "Focus on essay writing, nibandh, and extended writing tasks",
-    "Numerical / Practical Problems":     "Focus on solve, calculate, find the value, application problems",
+    "All Types (Sabhi)":              "mix 1-mark, 2-3 mark, 4-5 mark questions",
+    "1 Mark (Objective)":             "definitions, one-word, fill in blanks, true/false",
+    "2-3 Mark (Short Answer)":        "explain/describe/differentiate type",
+    "4-5 Mark (Long Answer)":         "detail with diagram, compare/contrast",
+    "Essay / Nibandh (6-8 Marks)":    "essay writing, nibandh",
+    "Numerical / Practical Problems": "solve/calculate/application problems",
 }
+
+IMP_Q_PROMPT = """MP Board {cls} {subject}, topic: {topic}. Language: {medium_lang}.
+Generate 12 important exam questions ({q_type}). Focus: {type_instruction}.
+
+Format each as:
+**Q[N]. [question]** ([marks] marks) [⭐/⭐⭐/⭐⭐⭐]
+💡 Hint: [1-line hint]
+---"""
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,10 +61,9 @@ def stream_questions(client, cls, subject, topic, q_type, medium):
         type_instruction=TYPE_INSTRUCTIONS.get(q_type, ""),
     )
     with client.messages.stream(
-        model="claude-opus-4-6",
-        max_tokens=4096,
+        model="claude-haiku-4-5",
+        max_tokens=1800,
         messages=[{"role": "user", "content": prompt}],
-        thinking={"type": "adaptive"},
     ) as stream:
         for text in stream.text_stream:
             yield text

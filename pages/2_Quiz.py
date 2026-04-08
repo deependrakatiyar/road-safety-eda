@@ -20,32 +20,11 @@ SUBJECTS = {
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
 
-QUIZ_PROMPT = """You are an expert MP Board (Madhya Pradesh Board) exam question setter for school students.
+QUIZ_PROMPT = """Generate {num_questions} MCQs for MP Board {cls} {subject}, topic: {topic}.
+Difficulty: {difficulty}. Language: {medium} (Hindi = Devanagari script).
 
-Generate exactly {num_questions} multiple choice questions (MCQs) for:
-- Class: {cls}
-- Subject: {subject}
-- Topic/Chapter: {topic}
-- Difficulty: {difficulty}
-- Medium: {medium}
-
-Rules:
-1. Questions must be based on MP Board curriculum and NCERT textbook syllabus
-2. Each question must have exactly 4 options (A, B, C, D)
-3. Only one option should be correct
-4. If medium is Hindi, write questions and options in Hindi (Devanagari). If English, write in English.
-5. Difficulty levels: Easy = direct fact-based, Medium = application-based, Hard = analytical/conceptual
-6. Include questions from different parts of the topic
-
-Return ONLY a valid JSON array — no markdown, no explanation, just the JSON:
-[
-  {{
-    "question": "Question text here?",
-    "options": {{"A": "Option 1", "B": "Option 2", "C": "Option 3", "D": "Option 4"}},
-    "correct": "A",
-    "explanation": "Brief explanation of why this is correct (1-2 lines)"
-  }}
-]"""
+Return ONLY a JSON array, no extra text:
+[{{"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct":"A","explanation":"1-line reason"}}]"""
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,8 +41,8 @@ def generate_quiz(client, cls, subject, topic, num_q, difficulty, medium) -> lis
         topic=topic, difficulty=difficulty, medium=medium
     )
     response = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=4096,
+        model="claude-haiku-4-5",
+        max_tokens=200 * num_q,   # ~200 tokens per question
         messages=[{"role": "user", "content": prompt}],
     )
     raw = response.content[0].text.strip()
