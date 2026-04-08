@@ -1,0 +1,222 @@
+import streamlit as st
+import anthropic
+import os
+
+st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
+
+# ── Data ─────────────────────────────────────────────────────────────────────
+
+CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"]
+
+SUBJECTS = {
+    "Class 6":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
+    "Class 7":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
+    "Class 8":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
+    "Class 9":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
+    "Class 10": ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
+    "Class 11": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
+    "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
+}
+
+QUESTION_TYPES = {
+    "All Types (Sabhi)":                  "Include all types: 1-mark, 2-mark, 3-mark, 5-mark, and essay questions",
+    "1 Mark (Objective)":                 "Very short answer — definitions, fill in the blanks, true/false",
+    "2-3 Mark (Short Answer)":            "Short answer questions requiring 2-4 sentence answers",
+    "4-5 Mark (Long Answer)":             "Detailed questions requiring paragraph answers",
+    "Essay / Nibandh (6-8 Marks)":        "Long essay type questions for Hindi and language subjects",
+    "Numerical / Practical Problems":     "Calculation-based and application problems (for Science, Math)",
+}
+
+IMP_Q_PROMPT = """You are an expert MP Board (Madhya Pradesh Board of Secondary Education) exam preparation specialist.
+
+Generate important questions for MP Board exam for:
+- Class: {cls}
+- Subject: {subject}
+- Chapter/Topic: {topic}
+- Question Type: {q_type}
+- Language: {medium}
+
+Instructions:
+1. Generate questions that are MOST LIKELY to appear in MP Board exams
+2. Base questions on previous years' MP Board exam patterns
+3. Include questions from all important sub-topics of the chapter
+4. {type_instruction}
+5. Write in {medium_lang}
+6. For each question, also provide:
+   - **Marks** it carries
+   - **Hints** (2-3 line answer hint for student reference)
+   - **Importance** level: ⭐ Important / ⭐⭐ Very Important / ⭐⭐⭐ Most Important
+
+Format each question clearly:
+
+---
+**Q[Number]. [Question text]** [Marks]
+[Importance level]
+💡 **Hint:** [Answer hint]
+---
+
+Group questions by marks/type. Start with most important questions.
+Generate at least 15-20 questions total."""
+
+TYPE_INSTRUCTIONS = {
+    "All Types (Sabhi)":                  "Mix all types: objective, short answer, long answer, and numerical",
+    "1 Mark (Objective)":                 "Focus on definitions, facts, fill in the blanks, true/false, one-word answers",
+    "2-3 Mark (Short Answer)":            "Focus on explain, describe, differentiate type questions",
+    "4-5 Mark (Long Answer)":             "Focus on explain with diagram, describe in detail, compare and contrast",
+    "Essay / Nibandh (6-8 Marks)":        "Focus on essay writing, nibandh, and extended writing tasks",
+    "Numerical / Practical Problems":     "Focus on solve, calculate, find the value, application problems",
+}
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def get_client():
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return None
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def stream_questions(client, cls, subject, topic, q_type, medium):
+    medium_lang = "Hindi (Devanagari script)" if medium == "Hindi Medium" else "English"
+    prompt = IMP_Q_PROMPT.format(
+        cls=cls, subject=subject, topic=topic, q_type=q_type, medium=medium,
+        medium_lang=medium_lang,
+        type_instruction=TYPE_INSTRUCTIONS.get(q_type, ""),
+    )
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+        thinking={"type": "adaptive"},
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+
+st.markdown("# ⭐ Important Questions")
+st.markdown("MP Board exam mein aane wale most important questions — hints ke saath!")
+st.divider()
+
+# Sidebar
+with st.sidebar:
+    st.markdown("### Question Settings")
+    selected_class   = st.selectbox("Class", CLASSES, index=4)
+    selected_subject = st.selectbox("Subject", SUBJECTS[selected_class])
+    topic            = st.text_input("Chapter / Topic", placeholder="e.g., Electricity, Mughal Empire")
+    q_type           = st.selectbox("Question Type", list(QUESTION_TYPES.keys()))
+    medium           = st.radio("Medium", ["Hindi Medium", "English Medium"])
+    generate_btn     = st.button("⭐ Questions Generate Karo!", use_container_width=True, type="primary")
+    st.divider()
+    st.markdown(f"**Selected:** {QUESTION_TYPES[q_type]}")
+    st.divider()
+    st.markdown("**Legend:**")
+    st.markdown("⭐ Important")
+    st.markdown("⭐⭐ Very Important")
+    st.markdown("⭐⭐⭐ Most Important (zaroor padhna!)")
+
+# API check
+api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+if not api_key:
+    st.warning("⚠️ **ANTHROPIC_API_KEY** set nahi hai. Please API key add karein.")
+    st.code("export ANTHROPIC_API_KEY='your-key-here'", language="bash")
+    st.stop()
+
+client = get_client()
+
+# State
+if "iq_content" not in st.session_state: st.session_state.iq_content = ""
+if "iq_config"   not in st.session_state: st.session_state.iq_config  = {}
+
+# Generate
+if generate_btn:
+    if not topic.strip():
+        st.error("Chapter ya topic ka naam likhein!")
+    else:
+        cfg = {"class": selected_class, "subject": selected_subject,
+               "topic": topic, "type": q_type, "medium": medium}
+        st.session_state.iq_config  = cfg
+        st.session_state.iq_content = ""
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Class", selected_class)
+        col2.metric("Subject", selected_subject)
+        col3.metric("Type", q_type.split("(")[0].strip())
+        st.markdown(f"**Topic:** {topic} | **Medium:** {medium}")
+        st.divider()
+
+        placeholder = st.empty()
+        full_text   = ""
+        with st.spinner("Important questions dhundhe ja rahe hain..."):
+            for chunk in stream_questions(client, selected_class, selected_subject, topic, q_type, medium):
+                full_text += chunk
+                placeholder.markdown(full_text + "▌")
+        placeholder.markdown(full_text)
+        st.session_state.iq_content = full_text
+
+        st.divider()
+        col1, col2 = st.columns(2)
+        col1.success("✅ Questions ready! Board exam ki best preparation karo!")
+        col2.download_button(
+            label="⬇️ Download Questions (.txt)",
+            data=full_text,
+            file_name=f"{selected_class}_{selected_subject}_{topic}_important_questions.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+elif st.session_state.iq_content:
+    cfg = st.session_state.iq_config
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Class", cfg["class"])
+    col2.metric("Subject", cfg["subject"])
+    col3.metric("Type", cfg["type"].split("(")[0].strip())
+    st.markdown(f"**Topic:** {cfg['topic']} | **Medium:** {cfg['medium']}")
+    st.divider()
+    st.markdown(st.session_state.iq_content)
+    st.divider()
+    st.download_button(
+        label="⬇️ Download Questions (.txt)",
+        data=st.session_state.iq_content,
+        file_name=f"{cfg['class']}_{cfg['subject']}_{cfg['topic']}_important_questions.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
+
+else:
+    # Empty state
+    st.info("👈 Left sidebar mein class, subject, topic fill karo aur **Questions Generate Karo** button dabao!")
+
+    # Board exam tips
+    st.markdown("### Board Exam Tips / Pariksha Ki Taiyari")
+    tips = [
+        ("📅", "Timetable Banao", "Har subject ko equal time do. 3-4 ghante regularly padhna better hai badi breaks se."),
+        ("📖", "NCERT Pehle Padho", "MP Board mein 80% questions NCERT se aate hain. Pehle NCERT complete karo."),
+        ("✍️", "Likhkar Practice Karo", "Sirf padhna kaafi nahi. Exam mein likhna hota hai, isliye practice writing karein."),
+        ("🔄", "Revision Zaruri Hai", "Har topic padhne ke baad revision karo. Spaced repetition se yaad zyada rehta hai."),
+        ("📝", "Previous Papers Solve Karo", "Pichle 5 saal ke papers solve karo — pattern samjho aur time management seekho."),
+        ("😴", "Neend Poori Lo", "Exam se pehle raat achi neend lo. Thaka hua dimag ache se kaam nahi karta."),
+    ]
+
+    cols = st.columns(3)
+    for i, (icon, title, desc) in enumerate(tips):
+        with cols[i % 3]:
+            st.markdown(f"""
+            <div style="background:#e8f5e9; border-radius:12px; padding:16px; margin-bottom:12px; border-left:4px solid #2e7d32;">
+                <h4 style="color:#1b5e20; margin:0 0 6px;">{icon} {title}</h4>
+                <p style="color:#444; font-size:0.88rem; margin:0;">{desc}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("### High-Yield Topics by Subject")
+    high_yield = {
+        "Class 10 Science":          "Electricity, Life Processes, Carbon & Its Compounds, Heredity & Evolution",
+        "Class 10 Social Science":   "Nationalism in India, Resources & Development, Money & Credit, Sectors of Indian Economy",
+        "Class 10 Mathematics":      "Real Numbers, Triangles, Circles, Quadratic Equations, Arithmetic Progressions",
+        "Class 12 Physics":          "Electrostatics, Current Electricity, Optics, Dual Nature of Radiation",
+        "Class 12 Chemistry":        "p-Block Elements, Coordination Compounds, Biomolecules, Polymers",
+        "Class 12 Mathematics":      "Integrals, Differential Equations, Vector Algebra, Linear Programming",
+        "Class 12 Biology":          "Genetics, Reproduction, Evolution, Biotechnology",
+    }
+    for sub, topics_str in high_yield.items():
+        st.markdown(f"**{sub}:** {topics_str}")
