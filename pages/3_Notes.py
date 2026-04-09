@@ -42,7 +42,7 @@ Use ## headings, **bold** key terms, ``` for formulas. End with 'Yaad Rakho' (5 
 
 def get_model(api_key: str):
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash")
+    return genai.GenerativeModel("gemini-2.0-flash-exp")
 
 
 def stream_notes(model, cls, subject, topic, note_type, medium):

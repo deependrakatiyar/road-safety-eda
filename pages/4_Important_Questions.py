@@ -48,7 +48,7 @@ Format each as:
 
 def get_model(api_key: str):
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash")
+    return genai.GenerativeModel("gemini-2.0-flash-exp")
 
 
 def stream_questions(model, cls, subject, topic, q_type, medium):

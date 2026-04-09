@@ -32,7 +32,7 @@ def get_model(api_key: str):
     genai.configure(api_key=api_key)
     # JSON mode for reliable structured output
     return genai.GenerativeModel(
-        "gemini-2.0-flash",
+        "gemini-2.0-flash-exp",
         generation_config=genai.types.GenerationConfig(
             response_mime_type="application/json"
         ),
