@@ -1,5 +1,5 @@
 import streamlit as st
-import anthropic
+import google.generativeai as genai
 import os
 import json
 import re
@@ -28,37 +28,32 @@ Return ONLY a JSON array, no extra text:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def get_client():
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return None
-    return anthropic.Anthropic(api_key=api_key)
+def get_model(api_key: str):
+    genai.configure(api_key=api_key)
+    # JSON mode for reliable structured output
+    return genai.GenerativeModel(
+        "gemini-1.5-flash",
+        generation_config=genai.types.GenerationConfig(
+            response_mime_type="application/json"
+        ),
+    )
 
 
-def generate_quiz(client, cls, subject, topic, num_q, difficulty, medium) -> list:
+def generate_quiz(model, cls, subject, topic, num_q, difficulty, medium) -> list:
     prompt = QUIZ_PROMPT.format(
         num_questions=num_q, cls=cls, subject=subject,
-        topic=topic, difficulty=difficulty, medium=medium
+        topic=topic, difficulty=difficulty, medium=medium,
     )
-    response = client.messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=200 * num_q,   # ~200 tokens per question
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = response.content[0].text.strip()
-    # Extract JSON from response
+    response = model.generate_content(prompt)
+    raw = response.text.strip()
     match = re.search(r'\[.*\]', raw, re.DOTALL)
-    if match:
-        return json.loads(match.group())
-    return json.loads(raw)
+    return json.loads(match.group() if match else raw)
 
 
 def score_color(score, total):
     pct = score / total * 100
-    if pct >= 80:
-        return "green"
-    elif pct >= 50:
-        return "orange"
+    if pct >= 80:   return "green"
+    if pct >= 50:   return "orange"
     return "red"
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -67,7 +62,6 @@ st.markdown("# ❓ Quiz Practice")
 st.markdown("MP Board pattern mein MCQ practice karo aur apni taiyari check karo!")
 st.divider()
 
-# Sidebar config
 with st.sidebar:
     st.markdown("### Quiz Settings")
     selected_class   = st.selectbox("Class", CLASSES, index=4)
@@ -79,40 +73,38 @@ with st.sidebar:
     generate_btn     = st.button("🎯 Quiz Generate Karo!", use_container_width=True, type="primary")
 
 # API check
-api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+api_key = os.environ.get("GEMINI_API_KEY", "")
 if not api_key:
-    st.warning("⚠️ **ANTHROPIC_API_KEY** set nahi hai. Please API key add karein.")
-    st.code("export ANTHROPIC_API_KEY='your-key-here'", language="bash")
+    st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
+    st.info("Free API key lo: https://aistudio.google.com/app/apikey")
+    st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
     st.stop()
 
-client = get_client()
+model = get_model(api_key)
 
-# Initialize state
-if "quiz_questions"  not in st.session_state: st.session_state.quiz_questions  = []
-if "quiz_answers"    not in st.session_state: st.session_state.quiz_answers    = {}
-if "quiz_submitted"  not in st.session_state: st.session_state.quiz_submitted  = False
-if "quiz_config"     not in st.session_state: st.session_state.quiz_config     = {}
+if "quiz_questions" not in st.session_state: st.session_state.quiz_questions = []
+if "quiz_answers"   not in st.session_state: st.session_state.quiz_answers   = {}
+if "quiz_submitted" not in st.session_state: st.session_state.quiz_submitted = False
+if "quiz_config"    not in st.session_state: st.session_state.quiz_config    = {}
 
-# Generate quiz
 if generate_btn:
     if not topic.strip():
         st.error("Please topic ya chapter ka naam likhein!")
     else:
         with st.spinner(f"Quiz generate ho raha hai... {selected_class} | {selected_subject} | {topic}"):
             try:
-                questions = generate_quiz(client, selected_class, selected_subject, topic, num_questions, difficulty, medium)
+                questions = generate_quiz(model, selected_class, selected_subject, topic, num_questions, difficulty, medium)
                 st.session_state.quiz_questions = questions
                 st.session_state.quiz_answers   = {}
-                st.session_state.quiz_submitted  = False
-                st.session_state.quiz_config     = {
+                st.session_state.quiz_submitted = False
+                st.session_state.quiz_config    = {
                     "class": selected_class, "subject": selected_subject,
-                    "topic": topic, "difficulty": difficulty, "medium": medium
+                    "topic": topic, "difficulty": difficulty, "medium": medium,
                 }
                 st.rerun()
             except Exception as e:
                 st.error(f"Quiz generate karne mein problem: {e}")
 
-# Display quiz
 if st.session_state.quiz_questions:
     cfg = st.session_state.quiz_config
     st.markdown(f"### {cfg['class']} | {cfg['subject']} | {cfg['topic']} | {cfg['difficulty']}")
@@ -123,26 +115,22 @@ if st.session_state.quiz_questions:
         with st.form("quiz_form"):
             for i, q in enumerate(st.session_state.quiz_questions):
                 st.markdown(f"**Q{i+1}.** {q['question']}")
-                options = q["options"]
                 choice = st.radio(
                     f"Q{i+1}",
-                    options=[f"{k}. {v}" for k, v in options.items()],
+                    options=[f"{k}. {v}" for k, v in q["options"].items()],
                     key=f"q_{i}",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
                 )
                 st.session_state.quiz_answers[i] = choice[0] if choice else None
                 st.markdown("---")
 
-            submitted = st.form_submit_button("✅ Submit Quiz", use_container_width=True, type="primary")
-            if submitted:
+            if st.form_submit_button("✅ Submit Quiz", use_container_width=True, type="primary"):
                 if len([v for v in st.session_state.quiz_answers.values() if v]) < len(st.session_state.quiz_questions):
                     st.error("Sabhi questions ke jawab do!")
                 else:
                     st.session_state.quiz_submitted = True
                     st.rerun()
-
     else:
-        # Show results
         questions = st.session_state.quiz_questions
         answers   = st.session_state.quiz_answers
         score     = sum(1 for i, q in enumerate(questions) if answers.get(i) == q["correct"])
@@ -150,7 +138,6 @@ if st.session_state.quiz_questions:
         pct       = int(score / total * 100)
         color     = score_color(score, total)
 
-        # Score card
         st.markdown(f"""
         <div style="background:{'#e8f5e9' if color=='green' else '#fff3e0' if color=='orange' else '#ffebee'};
                     border-radius:16px; padding:24px; text-align:center; border:2px solid {color};">
@@ -158,26 +145,20 @@ if st.session_state.quiz_questions:
             <p style="margin:8px 0 0;">{'Bahut badhiya! Excellent!' if pct>=80 else 'Accha kiya! Keep it up!' if pct>=50 else 'Aur mehnat karo! You can do it!'}</p>
         </div>
         """, unsafe_allow_html=True)
-
         st.progress(score / total)
         st.divider()
 
-        # Detailed review
         st.markdown("### Detailed Review / Jawab Dekho")
         for i, q in enumerate(questions):
             user_ans    = answers.get(i)
             correct_ans = q["correct"]
             is_correct  = user_ans == correct_ans
-
             icon = "✅" if is_correct else "❌"
             bg   = "#e8f5e9" if is_correct else "#ffebee"
-
             st.markdown(f"""
             <div style="background:{bg}; border-radius:10px; padding:14px; margin-bottom:12px;">
                 <strong>{icon} Q{i+1}.</strong> {q['question']}<br>
-                <span style="color:{'green' if is_correct else 'red'};">
-                    Aapka jawab: <strong>{user_ans}. {q['options'].get(user_ans,'')}</strong>
-                </span><br>
+                <span style="color:{'green' if is_correct else 'red'};">Aapka jawab: <strong>{user_ans}. {q['options'].get(user_ans,'')}</strong></span><br>
                 <span style="color:green;">Sahi jawab: <strong>{correct_ans}. {q['options'][correct_ans]}</strong></span><br>
                 <span style="color:#555; font-size:0.9rem;">💡 {q.get('explanation','')}</span>
             </div>
@@ -190,12 +171,10 @@ if st.session_state.quiz_questions:
             st.rerun()
         if col2.button("🆕 Naya Quiz Banao", use_container_width=True):
             st.session_state.quiz_questions = []
-            st.session_state.quiz_submitted  = False
-            st.session_state.quiz_answers    = {}
+            st.session_state.quiz_submitted = False
+            st.session_state.quiz_answers   = {}
             st.rerun()
-
 else:
-    # Empty state
     st.info("👈 Left sidebar mein class, subject aur topic fill karo, phir **Quiz Generate Karo** button dabao!")
     st.markdown("""
     **Topics ka example:**

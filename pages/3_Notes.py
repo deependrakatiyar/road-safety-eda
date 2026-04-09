@@ -1,5 +1,5 @@
 import streamlit as st
-import anthropic
+import google.generativeai as genai
 import os
 
 st.set_page_config(page_title="Study Notes - Padhai AI", page_icon="📝", layout="wide")
@@ -19,11 +19,11 @@ SUBJECTS = {
 }
 
 NOTE_TYPES = {
-    "Summary Notes (Saar)":         "Concise chapter summary with key points",
-    "Detailed Notes (Vistrit)":     "Comprehensive notes with explanations, examples, and diagrams description",
-    "Formula Sheet (Sutre)":        "All formulas, definitions, and key terms",
-    "Revision Notes (Revision)":    "Quick revision bullet points — perfect for last-minute prep",
-    "Mind Map (Diagram Style)":     "Topic breakdown in hierarchical structure",
+    "Summary Notes (Saar)":      "Concise chapter summary with key points",
+    "Detailed Notes (Vistrit)":  "Comprehensive notes with explanations, examples, and diagrams description",
+    "Formula Sheet (Sutre)":     "All formulas, definitions, and key terms",
+    "Revision Notes (Revision)": "Quick revision bullet points — perfect for last-minute prep",
+    "Mind Map (Diagram Style)":  "Topic breakdown in hierarchical structure",
 }
 
 TYPE_INSTRUCTIONS = {
@@ -40,29 +40,22 @@ Use ## headings, **bold** key terms, ``` for formulas. End with 'Yaad Rakho' (5 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def get_client():
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return None
-    return anthropic.Anthropic(api_key=api_key)
+def get_model(api_key: str):
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel("gemini-1.5-flash")
 
 
-def stream_notes(client, cls, subject, topic, note_type, medium):
+def stream_notes(model, cls, subject, topic, note_type, medium):
     medium_lang = "Hindi (Devanagari script)" if medium == "Hindi Medium" else "English"
     prompt = NOTES_PROMPT.format(
         cls=cls, subject=subject, topic=topic,
-        note_type=note_type, medium=medium,
-        medium_lang=medium_lang,
-        type_instruction=TYPE_INSTRUCTIONS.get(note_type, "")
+        note_type=note_type, medium_lang=medium_lang,
+        type_instruction=TYPE_INSTRUCTIONS.get(note_type, ""),
     )
-    max_tok = 800 if "Summary" in note_type or "Revision" in note_type or "Formula" in note_type else 1400
-    with client.messages.stream(
-        model="claude-haiku-4-5",
-        max_tokens=max_tok,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
+    response = model.generate_content(prompt, stream=True)
+    for chunk in response:
+        if chunk.text:
+            yield chunk.text
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -70,7 +63,6 @@ st.markdown("# 📝 Study Notes Generator")
 st.markdown("Kisi bhi chapter ke AI-powered notes instant banao — board exam ke liye!")
 st.divider()
 
-# Sidebar
 with st.sidebar:
     st.markdown("### Notes Settings")
     selected_class   = st.selectbox("Class", CLASSES, index=4)
@@ -83,26 +75,24 @@ with st.sidebar:
     st.markdown(f"**Selected type:** {NOTE_TYPES[note_type]}")
 
 # API check
-api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+api_key = os.environ.get("GEMINI_API_KEY", "")
 if not api_key:
-    st.warning("⚠️ **ANTHROPIC_API_KEY** set nahi hai. Please API key add karein.")
-    st.code("export ANTHROPIC_API_KEY='your-key-here'", language="bash")
+    st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
+    st.info("Free API key lo: https://aistudio.google.com/app/apikey")
+    st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
     st.stop()
 
-client = get_client()
+model = get_model(api_key)
 
-# State
 if "notes_content" not in st.session_state: st.session_state.notes_content = ""
 if "notes_config"  not in st.session_state: st.session_state.notes_config  = {}
 
-# Generate
 if generate_btn:
     if not topic.strip():
         st.error("Chapter ya topic ka naam likhein!")
     else:
-        cfg = {"class": selected_class, "subject": selected_subject,
-               "topic": topic, "type": note_type, "medium": medium}
-        st.session_state.notes_config  = cfg
+        st.session_state.notes_config  = {"class": selected_class, "subject": selected_subject,
+                                           "topic": topic, "type": note_type, "medium": medium}
         st.session_state.notes_content = ""
 
         st.markdown(f"### {selected_class} | {selected_subject} | {topic}")
@@ -112,21 +102,17 @@ if generate_btn:
         placeholder = st.empty()
         full_text   = ""
         with st.spinner("Notes generate ho rahi hain..."):
-            for chunk in stream_notes(client, selected_class, selected_subject, topic, note_type, medium):
+            for chunk in stream_notes(model, selected_class, selected_subject, topic, note_type, medium):
                 full_text += chunk
                 placeholder.markdown(full_text + "▌")
         placeholder.markdown(full_text)
         st.session_state.notes_content = full_text
 
         st.divider()
-        st.success("✅ Notes ready! Copy karein ya dobara generate karein.")
-        st.download_button(
-            label="⬇️ Notes Download Karo (.txt)",
-            data=full_text,
-            file_name=f"{selected_class}_{selected_subject}_{topic}_notes.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
+        st.success("✅ Notes ready!")
+        st.download_button("⬇️ Notes Download Karo (.txt)", data=full_text,
+                           file_name=f"{selected_class}_{selected_subject}_{topic}_notes.txt",
+                           mime="text/plain", use_container_width=True)
 
 elif st.session_state.notes_content:
     cfg = st.session_state.notes_config
@@ -135,22 +121,15 @@ elif st.session_state.notes_content:
     st.divider()
     st.markdown(st.session_state.notes_content)
     st.divider()
-    st.download_button(
-        label="⬇️ Notes Download Karo (.txt)",
-        data=st.session_state.notes_content,
-        file_name=f"{cfg['class']}_{cfg['subject']}_{cfg['topic']}_notes.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
-
+    st.download_button("⬇️ Notes Download Karo (.txt)", data=st.session_state.notes_content,
+                       file_name=f"{cfg['class']}_{cfg['subject']}_{cfg['topic']}_notes.txt",
+                       mime="text/plain", use_container_width=True)
 else:
-    # Empty state
     st.info("👈 Left sidebar mein class, subject, topic aur notes type choose karo, phir **Notes Banao** dabao!")
 
     st.markdown("### Notes ke Types / Types of Notes")
     cols = st.columns(2)
-    items = list(NOTE_TYPES.items())
-    for i, (name, desc) in enumerate(items):
+    for i, (name, desc) in enumerate(NOTE_TYPES.items()):
         with cols[i % 2]:
             st.markdown(f"""
             <div style="background:#f3e5f5; border-radius:10px; padding:14px; margin-bottom:12px; border-left:4px solid #7b1fa2;">
@@ -160,12 +139,11 @@ else:
             """, unsafe_allow_html=True)
 
     st.markdown("### Example Topics")
-    examples = {
-        "Class 10 Science": ["Light - Reflection and Refraction", "Carbon and its Compounds", "Life Processes"],
+    for sub, topics in {
+        "Class 10 Science":        ["Light - Reflection and Refraction", "Carbon and its Compounds", "Life Processes"],
         "Class 10 Social Science": ["Nationalism in India", "Resources and Development", "Money and Credit"],
-        "Class 12 Physics": ["Electric Charges and Fields", "Ray Optics", "Semiconductor Electronics"],
-        "Class 12 Chemistry": ["p-Block Elements", "Coordination Compounds", "Biomolecules"],
-        "Class 9 Mathematics": ["Number Systems", "Triangles", "Statistics"],
-    }
-    for subject, topics in examples.items():
-        st.markdown(f"**{subject}:** {' | '.join(topics)}")
+        "Class 12 Physics":        ["Electric Charges and Fields", "Ray Optics", "Semiconductor Electronics"],
+        "Class 12 Chemistry":      ["p-Block Elements", "Coordination Compounds", "Biomolecules"],
+        "Class 9 Mathematics":     ["Number Systems", "Triangles", "Statistics"],
+    }.items():
+        st.markdown(f"**{sub}:** {' | '.join(topics)}")

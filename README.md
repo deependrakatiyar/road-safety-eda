@@ -1,68 +1,173 @@
-# 🚦 Road Safety EDA (Streamlit)
+# 📚 Padhai AI — MP Board School Study Platform
 
-A lightweight Streamlit dashboard for **quick exploratory analysis of road-accident data**.  
-Filter by district and date range, view monthly trends, and see cause breakdowns.  
-Ships with a small sample CSV; simply swap in **IRAD / Police** exports to analyze real data.
+AI-powered study platform for MP Board students (Class 6–12). Completely **free to run** using Google Gemini API + Streamlit Community Cloud.
 
----
-
-## ✨ Features
-- Interactive filters for **Date** and **District**
-- Key metrics: **Incidents • Injuries • Fatalities**
-- Charts:
-  - **Incidents by Month**
-  - **Causes Breakdown**
-- Runs fully **offline**—no external database required
+**Features:** AI Tutor | MCQ Quiz | Study Notes | Important Questions  
+**Languages:** Hindi + English Medium  
+**Subjects:** All MP Board subjects, Class 6–12
 
 ---
 
-## 📂 Project Structure
-road-safety-eda/
-├─ app.py # Streamlit dashboard
-├─ requirements.txt # Python dependencies
-├─ README.md # Project documentation (this file)
-├─ LICENSE # MIT license
-└─ data/
-└─ accidents.csv # Sample dataset (replace with real data when available)
+## ⚡ Total Cost = ₹0
+
+| Service | Free Limit | Cost |
+|---------|-----------|------|
+| Google Gemini API (`gemini-1.5-flash`) | 15 req/min, 10 lakh tokens/day | **FREE** |
+| Streamlit Community Cloud (hosting) | Unlimited public apps | **FREE** |
+| GitHub | Free for public repos | **FREE** |
 
 ---
 
-## ⚙️ Quickstart
+## 🔑 Step 1 — Free API Key lena (Google Gemini)
 
-### Option A — Using Conda (recommended)
+1. **Google AI Studio** pe jao:
+   `https://aistudio.google.com/app/apikey`
+
+2. **Gmail account se login karo**
+
+3. **"Create API Key"** button dabao
+
+4. Key copy karo — aise dikhegi:
+   `AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`
+
+> Koi credit card nahi chahiye. No billing. Completely free.
+
+---
+
+## 🚀 Step 2 — Streamlit Community Cloud pe Deploy karna (Free Hosting)
+
+### 2a. Streamlit Cloud pe account banao
+
+1. `https://share.streamlit.io` pe jao
+2. **"Sign in with GitHub"** — GitHub account se login karo
+
+### 2b. App deploy karo
+
+1. **"New app"** button dabao
+
+2. Fill karo:
+   ```
+   Repository:  deependrakatiyar/road-safety-eda
+   Branch:      main
+   Main file:   app.py
+   ```
+
+3. **"Advanced settings"** → **"Secrets"** tab mein ye add karo:
+   ```toml
+   GEMINI_API_KEY = "AIzaSyXXXXXXXXXXXXXXXXXXXXX"
+   ```
+   (Apni actual key se replace karo)
+
+4. **"Deploy!"** dabao → 2-3 minute mein app live!
+
+   URL milega: `https://yourname-padhai-ai.streamlit.app`
+
+---
+
+## 💻 Local Machine pe Run karna (Testing)
+
 ```bash
-conda create -n roadsafety python=3.11 -y
-conda activate roadsafety
+# 1. Clone karo
+git clone https://github.com/deependrakatiyar/road-safety-eda.git
+cd road-safety-eda
+
+# 2. Install karo
 pip install -r requirements.txt
+
+# 3. API key set karo
+# Windows:
+set GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXX
+# Mac / Linux:
+export GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXX
+
+# 4. Run karo
 streamlit run app.py
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-# source .venv/bin/activate
+```
 
-pip install -r requirements.txt
-streamlit run app.py
-Open the Local URL shown in the terminal (e.g. http://localhost:8501) to use the dashboard.
-Data Format
-
-Your CSV should have the following columns:
-
-column	type	example
-date	date	2025-05-12
-district	string	Raisen
-injuries	integer	3
-fatalities	integer	1
-cause	string	Overspeeding
-
-To use your own data: export it to CSV, name it accidents.csv, and place it inside the data/ folder.
+Browser mein khulega: `http://localhost:8501`
 
 ---
 
-### How to use
-1. In the GitHub editor where you have `README.md` open, **Ctrl +A** to select all existing text.
-2. **Paste** everything above to replace it.
-3. Add a short commit message like `Revamp README with full project details`.
-4. Click **Commit changes**.
+## 🌐 Hostinger VPS pe Deploy karna (agar VPS hai)
 
-Your repository will immediately display this polished, complete README.
+> **Note:** Shared hosting pe ye kaam nahi karega (Python server nahi chalta).
+> Sirf VPS / Cloud server pe chalega. Shared hosting hai to Step 2 (Streamlit Cloud) use karo.
+
+```bash
+# SSH karo
+ssh root@your-vps-ip
+
+# Python + pip install (agar nahi hai)
+apt update && apt install python3 python3-pip screen -y
+
+# Repo clone karo
+git clone https://github.com/deependrakatiyar/road-safety-eda.git
+cd road-safety-eda
+
+# Dependencies install karo
+pip3 install -r requirements.txt
+
+# API key permanently set karo
+echo 'export GEMINI_API_KEY="AIzaSyXXXXXXXXXX"' >> ~/.bashrc
+source ~/.bashrc
+
+# Background mein run karo (screen use karke)
+screen -S padhai
+streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+# Ctrl+A phir D — screen se bahar aao, app chalta rahega
+```
+
+Browser mein: `http://your-vps-ip:8501`
+
+---
+
+## ✅ Testing Checklist
+
+App run hone ke baad ye test karo:
+
+- [ ] Home page khulta hai
+- [ ] Sidebar mein 4 pages dikh rahe hain (AI Tutor, Quiz, Notes, Important Questions)
+- [ ] **AI Tutor** — sawal pucho, jawab aaye
+- [ ] **Quiz** — Class 10 > Science > "Electricity" > 5 questions generate karo
+- [ ] **Notes** — Class 10 > Science > "Electricity" > Summary Notes generate karo
+- [ ] **Important Questions** — Class 10 > Science > "Electricity" > All Types
+- [ ] Hindi medium select karo — Hindi mein jawab aaye
+
+---
+
+## ❓ Common Problems
+
+| Problem | Solution |
+|---------|----------|
+| `GEMINI_API_KEY not found` | Key sahi se set karo, spelling check karo |
+| `ResourceExhausted` error | Free limit (15 req/min) hit hui — 1 min wait karo |
+| Quiz JSON error | Topic thoda alag likhke retry karo |
+| Streamlit Cloud deploy fail | Secrets mein key add ki? Format: `GEMINI_API_KEY = "..."` |
+
+---
+
+## 📁 File Structure
+
+```
+padhai-ai/
+├── app.py                          ← Home page
+├── requirements.txt                ← Python dependencies
+├── README.md                       ← Ye file (setup guide)
+└── pages/
+    ├── 1_AI_Tutor.py               ← Chat with AI tutor
+    ├── 2_Quiz.py                   ← MCQ Practice
+    ├── 3_Notes.py                  ← Study Notes generator
+    └── 4_Important_Questions.py    ← Board exam questions
+```
+
+---
+
+## 🆓 Gemini Free Tier Limits
+
+| Limit | Value |
+|-------|-------|
+| Requests per minute | 15 |
+| Tokens per day | 10,00,000 (1 Million) |
+| Requests per day | 1,500 |
+
+Ek student ke liye ye kaafi se zyada hai.

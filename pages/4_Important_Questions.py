@@ -1,5 +1,5 @@
 import streamlit as st
-import anthropic
+import google.generativeai as genai
 import os
 
 st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
@@ -19,12 +19,12 @@ SUBJECTS = {
 }
 
 QUESTION_TYPES = {
-    "All Types (Sabhi)":                  "Include all types: 1-mark, 2-mark, 3-mark, 5-mark, and essay questions",
-    "1 Mark (Objective)":                 "Very short answer — definitions, fill in the blanks, true/false",
-    "2-3 Mark (Short Answer)":            "Short answer questions requiring 2-4 sentence answers",
-    "4-5 Mark (Long Answer)":             "Detailed questions requiring paragraph answers",
-    "Essay / Nibandh (6-8 Marks)":        "Long essay type questions for Hindi and language subjects",
-    "Numerical / Practical Problems":     "Calculation-based and application problems (for Science, Math)",
+    "All Types (Sabhi)":              "Include all types: 1-mark, 2-mark, 3-mark, 5-mark, and essay questions",
+    "1 Mark (Objective)":             "Very short answer — definitions, fill in the blanks, true/false",
+    "2-3 Mark (Short Answer)":        "Short answer questions requiring 2-4 sentence answers",
+    "4-5 Mark (Long Answer)":         "Detailed questions requiring paragraph answers",
+    "Essay / Nibandh (6-8 Marks)":    "Long essay type questions for Hindi and language subjects",
+    "Numerical / Practical Problems": "Calculation-based and application problems (for Science, Math)",
 }
 
 TYPE_INSTRUCTIONS = {
@@ -46,27 +46,21 @@ Format each as:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def get_client():
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return None
-    return anthropic.Anthropic(api_key=api_key)
+def get_model(api_key: str):
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel("gemini-1.5-flash")
 
 
-def stream_questions(client, cls, subject, topic, q_type, medium):
+def stream_questions(model, cls, subject, topic, q_type, medium):
     medium_lang = "Hindi (Devanagari script)" if medium == "Hindi Medium" else "English"
     prompt = IMP_Q_PROMPT.format(
-        cls=cls, subject=subject, topic=topic, q_type=q_type, medium=medium,
-        medium_lang=medium_lang,
-        type_instruction=TYPE_INSTRUCTIONS.get(q_type, ""),
+        cls=cls, subject=subject, topic=topic, q_type=q_type,
+        medium_lang=medium_lang, type_instruction=TYPE_INSTRUCTIONS.get(q_type, ""),
     )
-    with client.messages.stream(
-        model="claude-haiku-4-5",
-        max_tokens=1800,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
+    response = model.generate_content(prompt, stream=True)
+    for chunk in response:
+        if chunk.text:
+            yield chunk.text
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -74,7 +68,6 @@ st.markdown("# ⭐ Important Questions")
 st.markdown("MP Board exam mein aane wale most important questions — hints ke saath!")
 st.divider()
 
-# Sidebar
 with st.sidebar:
     st.markdown("### Question Settings")
     selected_class   = st.selectbox("Class", CLASSES, index=4)
@@ -92,26 +85,24 @@ with st.sidebar:
     st.markdown("⭐⭐⭐ Most Important (zaroor padhna!)")
 
 # API check
-api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+api_key = os.environ.get("GEMINI_API_KEY", "")
 if not api_key:
-    st.warning("⚠️ **ANTHROPIC_API_KEY** set nahi hai. Please API key add karein.")
-    st.code("export ANTHROPIC_API_KEY='your-key-here'", language="bash")
+    st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
+    st.info("Free API key lo: https://aistudio.google.com/app/apikey")
+    st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
     st.stop()
 
-client = get_client()
+model = get_model(api_key)
 
-# State
 if "iq_content" not in st.session_state: st.session_state.iq_content = ""
 if "iq_config"   not in st.session_state: st.session_state.iq_config  = {}
 
-# Generate
 if generate_btn:
     if not topic.strip():
         st.error("Chapter ya topic ka naam likhein!")
     else:
-        cfg = {"class": selected_class, "subject": selected_subject,
-               "topic": topic, "type": q_type, "medium": medium}
-        st.session_state.iq_config  = cfg
+        st.session_state.iq_config  = {"class": selected_class, "subject": selected_subject,
+                                        "topic": topic, "type": q_type, "medium": medium}
         st.session_state.iq_content = ""
 
         col1, col2, col3 = st.columns(3)
@@ -124,7 +115,7 @@ if generate_btn:
         placeholder = st.empty()
         full_text   = ""
         with st.spinner("Important questions dhundhe ja rahe hain..."):
-            for chunk in stream_questions(client, selected_class, selected_subject, topic, q_type, medium):
+            for chunk in stream_questions(model, selected_class, selected_subject, topic, q_type, medium):
                 full_text += chunk
                 placeholder.markdown(full_text + "▌")
         placeholder.markdown(full_text)
@@ -132,14 +123,10 @@ if generate_btn:
 
         st.divider()
         col1, col2 = st.columns(2)
-        col1.success("✅ Questions ready! Board exam ki best preparation karo!")
-        col2.download_button(
-            label="⬇️ Download Questions (.txt)",
-            data=full_text,
-            file_name=f"{selected_class}_{selected_subject}_{topic}_important_questions.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
+        col1.success("✅ Questions ready!")
+        col2.download_button("⬇️ Download Questions (.txt)", data=full_text,
+                             file_name=f"{selected_class}_{selected_subject}_{topic}_important_questions.txt",
+                             mime="text/plain", use_container_width=True)
 
 elif st.session_state.iq_content:
     cfg = st.session_state.iq_config
@@ -151,19 +138,12 @@ elif st.session_state.iq_content:
     st.divider()
     st.markdown(st.session_state.iq_content)
     st.divider()
-    st.download_button(
-        label="⬇️ Download Questions (.txt)",
-        data=st.session_state.iq_content,
-        file_name=f"{cfg['class']}_{cfg['subject']}_{cfg['topic']}_important_questions.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
-
+    st.download_button("⬇️ Download Questions (.txt)", data=st.session_state.iq_content,
+                       file_name=f"{cfg['class']}_{cfg['subject']}_{cfg['topic']}_important_questions.txt",
+                       mime="text/plain", use_container_width=True)
 else:
-    # Empty state
     st.info("👈 Left sidebar mein class, subject, topic fill karo aur **Questions Generate Karo** button dabao!")
 
-    # Board exam tips
     st.markdown("### Board Exam Tips / Pariksha Ki Taiyari")
     tips = [
         ("📅", "Timetable Banao", "Har subject ko equal time do. 3-4 ghante regularly padhna better hai badi breaks se."),
@@ -173,7 +153,6 @@ else:
         ("📝", "Previous Papers Solve Karo", "Pichle 5 saal ke papers solve karo — pattern samjho aur time management seekho."),
         ("😴", "Neend Poori Lo", "Exam se pehle raat achi neend lo. Thaka hua dimag ache se kaam nahi karta."),
     ]
-
     cols = st.columns(3)
     for i, (icon, title, desc) in enumerate(tips):
         with cols[i % 3]:
@@ -185,14 +164,12 @@ else:
             """, unsafe_allow_html=True)
 
     st.markdown("### High-Yield Topics by Subject")
-    high_yield = {
-        "Class 10 Science":          "Electricity, Life Processes, Carbon & Its Compounds, Heredity & Evolution",
-        "Class 10 Social Science":   "Nationalism in India, Resources & Development, Money & Credit, Sectors of Indian Economy",
-        "Class 10 Mathematics":      "Real Numbers, Triangles, Circles, Quadratic Equations, Arithmetic Progressions",
-        "Class 12 Physics":          "Electrostatics, Current Electricity, Optics, Dual Nature of Radiation",
-        "Class 12 Chemistry":        "p-Block Elements, Coordination Compounds, Biomolecules, Polymers",
-        "Class 12 Mathematics":      "Integrals, Differential Equations, Vector Algebra, Linear Programming",
-        "Class 12 Biology":          "Genetics, Reproduction, Evolution, Biotechnology",
-    }
-    for sub, topics_str in high_yield.items():
+    for sub, topics_str in {
+        "Class 10 Science":        "Electricity, Life Processes, Carbon & Its Compounds, Heredity & Evolution",
+        "Class 10 Social Science": "Nationalism in India, Resources & Development, Money & Credit, Sectors of Indian Economy",
+        "Class 10 Mathematics":    "Real Numbers, Triangles, Circles, Quadratic Equations, Arithmetic Progressions",
+        "Class 12 Physics":        "Electrostatics, Current Electricity, Optics, Dual Nature of Radiation",
+        "Class 12 Chemistry":      "p-Block Elements, Coordination Compounds, Biomolecules, Polymers",
+        "Class 12 Biology":        "Genetics, Reproduction, Evolution, Biotechnology",
+    }.items():
         st.markdown(f"**{sub}:** {topics_str}")
