@@ -1,15 +1,13 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import os
 import json
 import re
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
 
-# ── Data ─────────────────────────────────────────────────────────────────────
-
 CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"]
-
 SUBJECTS = {
     "Class 6":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
     "Class 7":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
@@ -20,46 +18,41 @@ SUBJECTS = {
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
 
+MODEL = "gemini-2.0-flash-exp"
+
 QUIZ_PROMPT = """Generate {num_questions} MCQs for MP Board {cls} {subject}, topic: {topic}.
 Difficulty: {difficulty}. Language: {medium} (Hindi = Devanagari script).
 
 Return ONLY a JSON array, no extra text:
 [{{"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct":"A","explanation":"1-line reason"}}]"""
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+def get_client(api_key: str):
+    return genai.Client(api_key=api_key)
 
-def get_model(api_key: str):
-    genai.configure(api_key=api_key)
-    # JSON mode for reliable structured output
-    return genai.GenerativeModel(
-        "gemini-2.0-flash-exp",
-        generation_config=genai.types.GenerationConfig(
-            response_mime_type="application/json"
-        ),
-    )
-
-
-def generate_quiz(model, cls, subject, topic, num_q, difficulty, medium) -> list:
+def generate_quiz(client, cls, subject, topic, num_q, difficulty, medium) -> list:
     prompt = QUIZ_PROMPT.format(
         num_questions=num_q, cls=cls, subject=subject,
         topic=topic, difficulty=difficulty, medium=medium,
     )
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    )
     raw = response.text.strip()
     match = re.search(r'\[.*\]', raw, re.DOTALL)
     return json.loads(match.group() if match else raw)
 
-
 def score_color(score, total):
     pct = score / total * 100
-    if pct >= 80:   return "green"
-    if pct >= 50:   return "orange"
+    if pct >= 80: return "green"
+    if pct >= 50: return "orange"
     return "red"
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
 st.markdown("# ❓ Quiz Practice")
-st.markdown("MP Board pattern mein MCQ practice karo aur apni taiyari check karo!")
+st.markdown("MP Board pattern mein MCQ practice karo!")
 st.divider()
 
 with st.sidebar:
@@ -72,15 +65,14 @@ with st.sidebar:
     medium           = st.radio("Medium", ["Hindi Medium", "English Medium"])
     generate_btn     = st.button("🎯 Quiz Generate Karo!", use_container_width=True, type="primary")
 
-# API check
 api_key = os.environ.get("GEMINI_API_KEY", "")
 if not api_key:
     st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
-    st.info("Free API key lo: https://aistudio.google.com/app/apikey")
+    st.info("Free API key: https://aistudio.google.com/app/apikey")
     st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
     st.stop()
 
-model = get_model(api_key)
+client = get_client(api_key)
 
 if "quiz_questions" not in st.session_state: st.session_state.quiz_questions = []
 if "quiz_answers"   not in st.session_state: st.session_state.quiz_answers   = {}
@@ -93,14 +85,12 @@ if generate_btn:
     else:
         with st.spinner(f"Quiz generate ho raha hai... {selected_class} | {selected_subject} | {topic}"):
             try:
-                questions = generate_quiz(model, selected_class, selected_subject, topic, num_questions, difficulty, medium)
+                questions = generate_quiz(client, selected_class, selected_subject, topic, num_questions, difficulty, medium)
                 st.session_state.quiz_questions = questions
                 st.session_state.quiz_answers   = {}
                 st.session_state.quiz_submitted = False
-                st.session_state.quiz_config    = {
-                    "class": selected_class, "subject": selected_subject,
-                    "topic": topic, "difficulty": difficulty, "medium": medium,
-                }
+                st.session_state.quiz_config    = {"class": selected_class, "subject": selected_subject,
+                                                    "topic": topic, "difficulty": difficulty, "medium": medium}
                 st.rerun()
             except Exception as e:
                 st.error(f"Quiz generate karne mein problem: {e}")
@@ -115,15 +105,10 @@ if st.session_state.quiz_questions:
         with st.form("quiz_form"):
             for i, q in enumerate(st.session_state.quiz_questions):
                 st.markdown(f"**Q{i+1}.** {q['question']}")
-                choice = st.radio(
-                    f"Q{i+1}",
-                    options=[f"{k}. {v}" for k, v in q["options"].items()],
-                    key=f"q_{i}",
-                    label_visibility="collapsed",
-                )
+                choice = st.radio(f"Q{i+1}", options=[f"{k}. {v}" for k, v in q["options"].items()],
+                                  key=f"q_{i}", label_visibility="collapsed")
                 st.session_state.quiz_answers[i] = choice[0] if choice else None
                 st.markdown("---")
-
             if st.form_submit_button("✅ Submit Quiz", use_container_width=True, type="primary"):
                 if len([v for v in st.session_state.quiz_answers.values() if v]) < len(st.session_state.quiz_questions):
                     st.error("Sabhi questions ke jawab do!")
@@ -147,19 +132,17 @@ if st.session_state.quiz_questions:
         """, unsafe_allow_html=True)
         st.progress(score / total)
         st.divider()
-
-        st.markdown("### Detailed Review / Jawab Dekho")
+        st.markdown("### Detailed Review")
         for i, q in enumerate(questions):
             user_ans    = answers.get(i)
             correct_ans = q["correct"]
             is_correct  = user_ans == correct_ans
-            icon = "✅" if is_correct else "❌"
-            bg   = "#e8f5e9" if is_correct else "#ffebee"
+            bg = "#e8f5e9" if is_correct else "#ffebee"
             st.markdown(f"""
             <div style="background:{bg}; border-radius:10px; padding:14px; margin-bottom:12px;">
-                <strong>{icon} Q{i+1}.</strong> {q['question']}<br>
-                <span style="color:{'green' if is_correct else 'red'};">Aapka jawab: <strong>{user_ans}. {q['options'].get(user_ans,'')}</strong></span><br>
-                <span style="color:green;">Sahi jawab: <strong>{correct_ans}. {q['options'][correct_ans]}</strong></span><br>
+                <strong>{'✅' if is_correct else '❌'} Q{i+1}.</strong> {q['question']}<br>
+                <span style="color:{'green' if is_correct else 'red'};">Aapka: <strong>{user_ans}. {q['options'].get(user_ans,'')}</strong></span><br>
+                <span style="color:green;">Sahi: <strong>{correct_ans}. {q['options'][correct_ans]}</strong></span><br>
                 <span style="color:#555; font-size:0.9rem;">💡 {q.get('explanation','')}</span>
             </div>
             """, unsafe_allow_html=True)
@@ -180,7 +163,6 @@ else:
     **Topics ka example:**
     - Mathematics: *Quadratic Equations, Triangles, Statistics*
     - Science: *Electricity, Life Processes, Carbon Compounds*
-    - History: *Mughal Empire, Nationalism in India, World War II*
-    - Geography: *Resources, Climate of India, Natural Vegetation*
+    - History: *Mughal Empire, Nationalism in India*
     - Hindi: *Kabir ke Dohe, Samas, Sandhi*
     """)
