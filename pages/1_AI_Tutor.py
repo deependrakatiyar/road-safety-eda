@@ -29,7 +29,7 @@ MAX_HISTORY = 6  # last 3 pairs = 6 messages max
 
 def get_model(api_key: str):
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-1.5-flash", system_instruction=SYSTEM_PROMPT)
+    return genai.GenerativeModel("gemini-2.0-flash", system_instruction=SYSTEM_PROMPT)
 
 
 def build_user_message(question: str, cls: str, subject: str, medium: str) -> str:
