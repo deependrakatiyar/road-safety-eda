@@ -18,7 +18,7 @@ SUBJECTS = {
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
 
-MODEL = "gemini-2.0-flash-exp"
+MODEL = "gemini-2.0-flash"
 
 QUIZ_PROMPT = """Generate {num_questions} MCQs for MP Board {cls} {subject}, topic: {topic}.
 Difficulty: {difficulty}. Language: {medium} (Hindi = Devanagari script).

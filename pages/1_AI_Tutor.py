@@ -21,7 +21,7 @@ SYSTEM_PROMPT = """You are Padhai AI, an MP Board tutor (Class 6-12).
 - Step-by-step explanations; bold key terms and formulas.
 - Keep answers concise but complete. End with one follow-up question."""
 
-MODEL = "gemini-2.0-flash-exp"
+MODEL = "gemini-2.0-flash"
 MAX_HISTORY = 6
 
 def get_client(api_key: str):
