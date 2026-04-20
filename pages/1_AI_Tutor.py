@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import MODEL, get_client, require_api_key, show_api_error
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage
 
 st.set_page_config(page_title="AI Tutor - Padhai AI", page_icon="🤖", layout="wide")
 
@@ -62,6 +62,8 @@ with st.sidebar:
 
 if not require_api_key():
     st.stop()
+if not ensure_registered():
+    st.stop()
 
 if "tutor_messages" not in st.session_state:
     st.session_state.tutor_messages = []
@@ -99,6 +101,7 @@ if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected
                 full_text += chunk
                 placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
+            log_usage("AI Tutor", selected_subject, prompt[:80])
         except Exception as e:
             show_api_error(e)
     st.session_state.tutor_messages.append({"role": "assistant", "content": full_text})
