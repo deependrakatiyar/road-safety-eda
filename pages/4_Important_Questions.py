@@ -1,10 +1,8 @@
 import streamlit as st
-from google import genai
-from google.genai import types
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import show_api_error
+from utils import MODEL, get_client, require_api_key, show_api_error
 
 st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
 
@@ -18,8 +16,6 @@ SUBJECTS = {
     "Class 11": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
-
-MODEL = "gemini-2.0-flash"
 
 QUESTION_TYPES = {
     "All Types (Sabhi)":              "Include all types: 1-mark, 2-mark, 3-mark, 5-mark, and essay questions",
@@ -45,16 +41,20 @@ Format each as:
 💡 Hint: [1-line hint]
 ---"""
 
-def get_client(api_key: str):
-    return genai.Client(api_key=api_key)
-
-def stream_questions(client, cls, subject, topic, q_type, medium):
+def stream_questions(cls, subject, topic, q_type, medium):
     medium_lang = "Hindi (Devanagari script)" if medium == "Hindi Medium" else "English"
     prompt = IMP_Q_PROMPT.format(cls=cls, subject=subject, topic=topic, q_type=q_type,
                                   medium_lang=medium_lang, type_instruction=TYPE_INSTRUCTIONS.get(q_type, ""))
-    for chunk in client.models.generate_content_stream(model=MODEL, contents=prompt):
-        if chunk.text:
-            yield chunk.text
+    stream = get_client().chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        stream=True,
+        max_tokens=1200,
+    )
+    for chunk in stream:
+        text = chunk.choices[0].delta.content
+        if text:
+            yield text
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -75,14 +75,8 @@ with st.sidebar:
     st.divider()
     st.markdown("**Legend:**\n⭐ Important\n⭐⭐ Very Important\n⭐⭐⭐ Most Important")
 
-api_key = os.environ.get("GEMINI_API_KEY", "")
-if not api_key:
-    st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
-    st.info("Free API key: https://aistudio.google.com/app/apikey")
-    st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
+if not require_api_key():
     st.stop()
-
-client = get_client(api_key)
 
 if "iq_content" not in st.session_state: st.session_state.iq_content = ""
 if "iq_config"   not in st.session_state: st.session_state.iq_config  = {}
@@ -104,7 +98,7 @@ if generate_btn:
         full_text   = ""
         try:
             with st.spinner("Important questions dhundhe ja rahe hain..."):
-                for chunk in stream_questions(client, selected_class, selected_subject, topic, q_type, medium):
+                for chunk in stream_questions(selected_class, selected_subject, topic, q_type, medium):
                     full_text += chunk
                     placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)

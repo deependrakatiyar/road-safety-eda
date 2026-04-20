@@ -1,10 +1,8 @@
 import streamlit as st
-from google import genai
-from google.genai import types
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import show_api_error
+from utils import MODEL, get_client, require_api_key, show_api_error
 
 st.set_page_config(page_title="Study Notes - Padhai AI", page_icon="📝", layout="wide")
 
@@ -18,8 +16,6 @@ SUBJECTS = {
     "Class 11": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
-
-MODEL = "gemini-2.0-flash"
 
 NOTE_TYPES = {
     "Summary Notes (Saar)":      "Concise chapter summary with key points",
@@ -39,17 +35,21 @@ NOTES_PROMPT = """MP Board {cls} {subject} — create {note_type} for topic: {to
 Instructions: {type_instruction}. Language: {medium_lang}.
 Use ## headings, **bold** key terms, ``` for formulas. End with 'Yaad Rakho' (5 key points)."""
 
-def get_client(api_key: str):
-    return genai.Client(api_key=api_key)
-
-def stream_notes(client, cls, subject, topic, note_type, medium):
+def stream_notes(cls, subject, topic, note_type, medium):
     medium_lang = "Hindi (Devanagari script)" if medium == "Hindi Medium" else "English"
     prompt = NOTES_PROMPT.format(cls=cls, subject=subject, topic=topic,
                                   note_type=note_type, medium_lang=medium_lang,
                                   type_instruction=TYPE_INSTRUCTIONS.get(note_type, ""))
-    for chunk in client.models.generate_content_stream(model=MODEL, contents=prompt):
-        if chunk.text:
-            yield chunk.text
+    stream = get_client().chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        stream=True,
+        max_tokens=1200,
+    )
+    for chunk in stream:
+        text = chunk.choices[0].delta.content
+        if text:
+            yield text
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -68,14 +68,8 @@ with st.sidebar:
     st.divider()
     st.markdown(f"**Selected:** {NOTE_TYPES[note_type]}")
 
-api_key = os.environ.get("GEMINI_API_KEY", "")
-if not api_key:
-    st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
-    st.info("Free API key: https://aistudio.google.com/app/apikey")
-    st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
+if not require_api_key():
     st.stop()
-
-client = get_client(api_key)
 
 if "notes_content" not in st.session_state: st.session_state.notes_content = ""
 if "notes_config"  not in st.session_state: st.session_state.notes_config  = {}
@@ -94,7 +88,7 @@ if generate_btn:
         full_text   = ""
         try:
             with st.spinner("Notes generate ho rahi hain..."):
-                for chunk in stream_notes(client, selected_class, selected_subject, topic, note_type, medium):
+                for chunk in stream_notes(selected_class, selected_subject, topic, note_type, medium):
                     full_text += chunk
                     placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)

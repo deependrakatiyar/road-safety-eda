@@ -176,21 +176,24 @@ with st.sidebar:
 
     # API Connection Test
     st.markdown("### 🔌 API Connection Test")
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    import sys as _sys; _sys.path.append(".")
+    from utils import get_api_key
+    api_key = get_api_key()
     if not api_key:
-        st.error("❌ GEMINI_API_KEY missing!")
-        st.caption("Streamlit Cloud → Manage app → Secrets mein add karo.")
+        st.warning("⚠️ Groq API Key set nahi hai.")
+        st.caption("Kisi bhi page par jao aur sidebar mein key enter karo.")
     else:
         st.success(f"✅ Key found: `...{api_key[-6:]}`")
         if st.button("🧪 Test Karo", use_container_width=True):
             try:
-                from google import genai
-                client = genai.Client(api_key=api_key)
-                resp = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents="Say: OK"
+                from groq import Groq
+                client = Groq(api_key=api_key)
+                resp = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": "Say: OK"}],
+                    max_tokens=5,
                 )
-                st.success(f"✅ API Working! Response: {resp.text[:40]}")
+                st.success(f"✅ API Working! Response: {resp.choices[0].message.content}")
             except Exception as e:
                 st.error("❌ API Error:")
                 st.code(str(e), language="text")
