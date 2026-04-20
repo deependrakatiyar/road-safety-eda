@@ -2,6 +2,9 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from utils import show_api_error
 
 st.set_page_config(page_title="AI Tutor - Padhai AI", page_icon="🤖", layout="wide")
 
@@ -113,6 +116,6 @@ if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected
                 placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
         except Exception as e:
-            placeholder.error(f"❌ Error: {e}")
+            show_api_error(e)
 
     st.session_state.tutor_messages.append({"role": "assistant", "content": full_text})

@@ -2,6 +2,9 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from utils import show_api_error
 
 st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
 
@@ -106,8 +109,7 @@ if generate_btn:
                     placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
         except Exception as e:
-            st.error("❌ Error aaya — neeche dekho:")
-            st.code(str(e), language="text")
+            show_api_error(e)
             st.stop()
         st.session_state.iq_content = full_text
         st.divider()
