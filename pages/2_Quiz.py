@@ -4,6 +4,9 @@ from google.genai import types
 import os
 import json
 import re
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from utils import show_api_error
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
 
@@ -93,7 +96,7 @@ if generate_btn:
                                                     "topic": topic, "difficulty": difficulty, "medium": medium}
                 st.rerun()
             except Exception as e:
-                st.error(f"Quiz generate karne mein problem: {e}")
+                show_api_error(e)
 
 if st.session_state.quiz_questions:
     cfg = st.session_state.quiz_config
