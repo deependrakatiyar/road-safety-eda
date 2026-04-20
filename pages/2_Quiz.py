@@ -1,12 +1,10 @@
 import streamlit as st
-from google import genai
-from google.genai import types
 import os
 import json
 import re
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import show_api_error
+from utils import MODEL, get_client, require_api_key, show_api_error
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
 
@@ -21,30 +19,25 @@ SUBJECTS = {
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
 
-MODEL = "gemini-2.0-flash"
-
 QUIZ_PROMPT = """Generate {num_questions} MCQs for MP Board {cls} {subject}, topic: {topic}.
 Difficulty: {difficulty}. Language: {medium} (Hindi = Devanagari script).
 
-Return ONLY a JSON array, no extra text:
-[{{"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct":"A","explanation":"1-line reason"}}]"""
+Return ONLY valid JSON: {{"questions":[{{"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct":"A","explanation":"1-line reason"}}]}}"""
 
-def get_client(api_key: str):
-    return genai.Client(api_key=api_key)
-
-def generate_quiz(client, cls, subject, topic, num_q, difficulty, medium) -> list:
+def generate_quiz(cls, subject, topic, num_q, difficulty, medium) -> list:
     prompt = QUIZ_PROMPT.format(
         num_questions=num_q, cls=cls, subject=subject,
         topic=topic, difficulty=difficulty, medium=medium,
     )
-    response = client.models.generate_content(
+    response = get_client().chat.completions.create(
         model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        max_tokens=2000,
     )
-    raw = response.text.strip()
-    match = re.search(r'\[.*\]', raw, re.DOTALL)
-    return json.loads(match.group() if match else raw)
+    raw = response.choices[0].message.content.strip()
+    data = json.loads(raw)
+    return data.get("questions", data) if isinstance(data, dict) else data
 
 def score_color(score, total):
     pct = score / total * 100
@@ -68,14 +61,8 @@ with st.sidebar:
     medium           = st.radio("Medium", ["Hindi Medium", "English Medium"])
     generate_btn     = st.button("🎯 Quiz Generate Karo!", use_container_width=True, type="primary")
 
-api_key = os.environ.get("GEMINI_API_KEY", "")
-if not api_key:
-    st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
-    st.info("Free API key: https://aistudio.google.com/app/apikey")
-    st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
+if not require_api_key():
     st.stop()
-
-client = get_client(api_key)
 
 if "quiz_questions" not in st.session_state: st.session_state.quiz_questions = []
 if "quiz_answers"   not in st.session_state: st.session_state.quiz_answers   = {}
@@ -88,7 +75,7 @@ if generate_btn:
     else:
         with st.spinner(f"Quiz generate ho raha hai... {selected_class} | {selected_subject} | {topic}"):
             try:
-                questions = generate_quiz(client, selected_class, selected_subject, topic, num_questions, difficulty, medium)
+                questions = generate_quiz(selected_class, selected_subject, topic, num_questions, difficulty, medium)
                 st.session_state.quiz_questions = questions
                 st.session_state.quiz_answers   = {}
                 st.session_state.quiz_submitted = False

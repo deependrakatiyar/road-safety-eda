@@ -1,10 +1,8 @@
 import streamlit as st
-from google import genai
-from google.genai import types
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import show_api_error
+from utils import MODEL, get_client, require_api_key, show_api_error
 
 st.set_page_config(page_title="AI Tutor - Padhai AI", page_icon="🤖", layout="wide")
 
@@ -24,31 +22,25 @@ SYSTEM_PROMPT = """You are Padhai AI, an MP Board tutor (Class 6-12).
 - Step-by-step explanations; bold key terms and formulas.
 - Keep answers concise but complete. End with one follow-up question."""
 
-MODEL = "gemini-2.0-flash"
 MAX_HISTORY = 6
 
-def get_client(api_key: str):
-    return genai.Client(api_key=api_key)
+def stream_response(messages: list):
+    trimmed = messages[-MAX_HISTORY:]
+    groq_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for m in trimmed:
+        role = "user" if m["role"] == "user" else "assistant"
+        groq_msgs.append({"role": role, "content": m["content"]})
+    stream = get_client().chat.completions.create(
+        model=MODEL, messages=groq_msgs, stream=True, max_tokens=800,
+    )
+    for chunk in stream:
+        text = chunk.choices[0].delta.content
+        if text:
+            yield text
 
 def build_user_message(question: str, cls: str, subject: str, medium: str) -> str:
     lang = "Respond in Hindi (Devanagari)." if medium == "Hindi Medium" else "Respond in English."
     return f"[{cls} | {subject}] {lang}\n{question}"
-
-def stream_response(client, messages: list):
-    trimmed = messages[-MAX_HISTORY:]
-    history = []
-    for m in trimmed[:-1]:
-        role = "user" if m["role"] == "user" else "model"
-        history.append(types.Content(role=role, parts=[types.Part(text=m["content"])]))
-
-    chat = client.chats.create(
-        model=MODEL,
-        history=history,
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-    )
-    for chunk in chat.send_message_stream(trimmed[-1]["content"]):
-        if chunk.text:
-            yield chunk.text
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -68,14 +60,8 @@ with st.sidebar:
     st.divider()
     st.markdown("**Tips:**\n- Sawal clearly likhein\n- Chapter bhi batayein\n- 'Aur explain karo' bol sakte ho")
 
-api_key = os.environ.get("GEMINI_API_KEY", "")
-if not api_key:
-    st.warning("⚠️ **GEMINI_API_KEY** set nahi hai.")
-    st.info("Free API key: https://aistudio.google.com/app/apikey")
-    st.code("export GEMINI_API_KEY='your-key-here'", language="bash")
+if not require_api_key():
     st.stop()
-
-client = get_client(api_key)
 
 if "tutor_messages" not in st.session_state:
     st.session_state.tutor_messages = []
@@ -103,19 +89,16 @@ if not st.session_state.tutor_messages:
 if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected_subject})"):
     user_msg = build_user_message(prompt, selected_class, selected_subject, medium)
     st.session_state.tutor_messages.append({"role": "user", "content": user_msg})
-
     with st.chat_message("user", avatar="🧑‍🎓"):
         st.markdown(prompt)
-
     with st.chat_message("assistant", avatar="🤖"):
         placeholder = st.empty()
         full_text = ""
         try:
-            for chunk in stream_response(client, st.session_state.tutor_messages):
+            for chunk in stream_response(st.session_state.tutor_messages):
                 full_text += chunk
                 placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
         except Exception as e:
             show_api_error(e)
-
     st.session_state.tutor_messages.append({"role": "assistant", "content": full_text})
