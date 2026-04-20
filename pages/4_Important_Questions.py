@@ -16,7 +16,7 @@ SUBJECTS = {
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
 
-MODEL = "gemini-2.0-flash-exp"
+MODEL = "gemini-2.0-flash"
 
 QUESTION_TYPES = {
     "All Types (Sabhi)":              "Include all types: 1-mark, 2-mark, 3-mark, 5-mark, and essay questions",

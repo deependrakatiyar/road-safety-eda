@@ -187,7 +187,7 @@ with st.sidebar:
                 from google import genai
                 client = genai.Client(api_key=api_key)
                 resp = client.models.generate_content(
-                    model="gemini-2.0-flash-exp",
+                    model="gemini-2.0-flash",
                     contents="Say: OK"
                 )
                 st.success(f"✅ API Working! Response: {resp.text[:40]}")

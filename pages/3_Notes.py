@@ -16,7 +16,7 @@ SUBJECTS = {
     "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
 }
 
-MODEL = "gemini-2.0-flash-exp"
+MODEL = "gemini-2.0-flash"
 
 NOTE_TYPES = {
     "Summary Notes (Saar)":      "Concise chapter summary with key points",
