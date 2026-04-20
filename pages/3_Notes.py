@@ -89,11 +89,16 @@ if generate_btn:
         st.divider()
         placeholder = st.empty()
         full_text   = ""
-        with st.spinner("Notes generate ho rahi hain..."):
-            for chunk in stream_notes(client, selected_class, selected_subject, topic, note_type, medium):
-                full_text += chunk
-                placeholder.markdown(full_text + "▌")
-        placeholder.markdown(full_text)
+        try:
+            with st.spinner("Notes generate ho rahi hain..."):
+                for chunk in stream_notes(client, selected_class, selected_subject, topic, note_type, medium):
+                    full_text += chunk
+                    placeholder.markdown(full_text + "▌")
+            placeholder.markdown(full_text)
+        except Exception as e:
+            st.error("❌ Error aaya — neeche dekho:")
+            st.code(str(e), language="text")
+            st.stop()
         st.session_state.notes_content = full_text
         st.divider()
         st.success("✅ Notes ready!")

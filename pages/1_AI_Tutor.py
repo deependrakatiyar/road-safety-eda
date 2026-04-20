@@ -107,9 +107,12 @@ if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected
     with st.chat_message("assistant", avatar="🤖"):
         placeholder = st.empty()
         full_text = ""
-        for chunk in stream_response(client, st.session_state.tutor_messages):
-            full_text += chunk
-            placeholder.markdown(full_text + "▌")
-        placeholder.markdown(full_text)
+        try:
+            for chunk in stream_response(client, st.session_state.tutor_messages):
+                full_text += chunk
+                placeholder.markdown(full_text + "▌")
+            placeholder.markdown(full_text)
+        except Exception as e:
+            placeholder.error(f"❌ Error: {e}")
 
     st.session_state.tutor_messages.append({"role": "assistant", "content": full_text})

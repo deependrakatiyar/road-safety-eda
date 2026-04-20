@@ -99,11 +99,16 @@ if generate_btn:
         st.divider()
         placeholder = st.empty()
         full_text   = ""
-        with st.spinner("Important questions dhundhe ja rahe hain..."):
-            for chunk in stream_questions(client, selected_class, selected_subject, topic, q_type, medium):
-                full_text += chunk
-                placeholder.markdown(full_text + "▌")
-        placeholder.markdown(full_text)
+        try:
+            with st.spinner("Important questions dhundhe ja rahe hain..."):
+                for chunk in stream_questions(client, selected_class, selected_subject, topic, q_type, medium):
+                    full_text += chunk
+                    placeholder.markdown(full_text + "▌")
+            placeholder.markdown(full_text)
+        except Exception as e:
+            st.error("❌ Error aaya — neeche dekho:")
+            st.code(str(e), language="text")
+            st.stop()
         st.session_state.iq_content = full_text
         st.divider()
         col1, col2 = st.columns(2)

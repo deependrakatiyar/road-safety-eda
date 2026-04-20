@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 
 st.set_page_config(
     page_title="Padhai AI - MP Board Study Platform",
@@ -163,7 +164,6 @@ st.markdown("""
 
 # Sidebar info
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/MP_logo.svg/120px-MP_logo.svg.png", width=80)
     st.markdown("### Padhai AI")
     st.markdown("**MP Board Study Platform**")
     st.divider()
@@ -173,5 +173,24 @@ with st.sidebar:
     st.markdown("- 📝 **Notes** — Notes Banao")
     st.markdown("- ⭐ **Important Q** — Exam Prep")
     st.divider()
-    st.markdown("**Setup:** API key add karo `ANTHROPIC_API_KEY` environment variable mein.")
-    st.info("Sidebar mein pages click karke navigate karo!")
+
+    # API Connection Test
+    st.markdown("### 🔌 API Connection Test")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        st.error("❌ GEMINI_API_KEY missing!")
+        st.caption("Streamlit Cloud → Manage app → Secrets mein add karo.")
+    else:
+        st.success(f"✅ Key found: `...{api_key[-6:]}`")
+        if st.button("🧪 Test Karo", use_container_width=True):
+            try:
+                from google import genai
+                client = genai.Client(api_key=api_key)
+                resp = client.models.generate_content(
+                    model="gemini-2.0-flash-exp",
+                    contents="Say: OK"
+                )
+                st.success(f"✅ API Working! Response: {resp.text[:40]}")
+            except Exception as e:
+                st.error("❌ API Error:")
+                st.code(str(e), language="text")
