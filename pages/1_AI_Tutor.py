@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit, show_disclaimer
 
 st.set_page_config(page_title="AI Tutor - Padhai AI", page_icon="🤖", layout="wide")
 
@@ -102,6 +102,7 @@ if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected
                 full_text += chunk
                 placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
+            show_disclaimer()
             log_usage("AI Tutor", selected_subject, prompt[:80])
             show_gov_footer()
         except Exception as e:

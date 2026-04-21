@@ -115,6 +115,21 @@ def _sb_get(table: str, select: str = "*", order: str = "created_at.desc", limit
     except Exception:
         return []
 
+# ── AI Disclaimer ─────────────────────────────────────────────────────────────
+
+_DISCLAIMER = """
+<div style="background:#fff8e1;border-left:4px solid #f9a825;border-radius:6px;
+            padding:10px 14px;margin:12px 0;font-size:0.82rem;color:#555;">
+  <strong>⚠️ AI-Generated Content — Disclaimer:</strong><br>
+  Yeh content AI (Large Language Model) dwara generate kiya gaya hai.
+  Yeh <strong>sirf padhai mein help</strong> ke liye hai.
+  Exam ya important kaam ke liye hamesha <strong>NCERT books / official sources</strong> se verify karein.
+  District Administration Raisen ya NIC is content ki accuracy ki guarantee nahi deta.
+</div>"""
+
+def show_disclaimer():
+    st.markdown(_DISCLAIMER, unsafe_allow_html=True)
+
 # ── Government branding ───────────────────────────────────────────────────────
 
 _GOV_BANNER = """

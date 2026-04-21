@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit, show_disclaimer
 
 st.set_page_config(page_title="Study Notes - Padhai AI", page_icon="📝", layout="wide")
 
@@ -100,6 +100,7 @@ if generate_btn:
             st.stop()
         st.session_state.notes_content = full_text
         log_usage("Notes", selected_subject, topic)
+        show_disclaimer()
         st.divider()
         st.success("✅ Notes ready!")
         st.download_button("⬇️ Notes Download Karo (.txt)", data=full_text,

@@ -48,7 +48,7 @@ st.divider()
 
 if not (_secret("SUPABASE_URL") and _secret("SUPABASE_KEY")):
     st.warning("⚠️ Supabase credentials missing in Secrets.")
-    st.code("""SUPABASE_URL = "https://xxxx.supabase.co"\nSUPABASE_KEY = "eyJ..."\nADMIN_PASSWORD = "your_password"", language="toml")
+    st.code('SUPABASE_URL = "https://xxxx.supabase.co"\nSUPABASE_KEY = "eyJ..."\nADMIN_PASSWORD = "your_password"', language="toml")
     st.stop()
 
 # ── Date filter ───────────────────────────────────────────────────────────────

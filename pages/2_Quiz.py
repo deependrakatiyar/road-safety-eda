@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import json
 import re
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit, show_disclaimer
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
 
@@ -125,6 +125,7 @@ if st.session_state.quiz_questions:
         </div>
         """, unsafe_allow_html=True)
         st.progress(score / total)
+        show_disclaimer()
         st.divider()
         st.markdown("### Detailed Review")
         for i, q in enumerate(questions):
