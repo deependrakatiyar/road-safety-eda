@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import MODEL, get_client, require_api_key, show_api_error
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage
 
 st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
 
@@ -77,6 +77,8 @@ with st.sidebar:
 
 if not require_api_key():
     st.stop()
+if not ensure_registered():
+    st.stop()
 
 if "iq_content" not in st.session_state: st.session_state.iq_content = ""
 if "iq_config"   not in st.session_state: st.session_state.iq_config  = {}
@@ -106,6 +108,7 @@ if generate_btn:
             show_api_error(e)
             st.stop()
         st.session_state.iq_content = full_text
+        log_usage("Important Questions", selected_subject, topic)
         st.divider()
         col1, col2 = st.columns(2)
         col1.success("✅ Questions ready!")

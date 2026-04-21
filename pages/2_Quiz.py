@@ -4,7 +4,7 @@ import json
 import re
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import MODEL, get_client, require_api_key, show_api_error
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
 
@@ -63,6 +63,8 @@ with st.sidebar:
 
 if not require_api_key():
     st.stop()
+if not ensure_registered():
+    st.stop()
 
 if "quiz_questions" not in st.session_state: st.session_state.quiz_questions = []
 if "quiz_answers"   not in st.session_state: st.session_state.quiz_answers   = {}
@@ -81,6 +83,7 @@ if generate_btn:
                 st.session_state.quiz_submitted = False
                 st.session_state.quiz_config    = {"class": selected_class, "subject": selected_subject,
                                                     "topic": topic, "difficulty": difficulty, "medium": medium}
+                log_usage("Quiz", selected_subject, topic)
                 st.rerun()
             except Exception as e:
                 show_api_error(e)
