@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit
 
 st.set_page_config(page_title="AI Tutor - Padhai AI", page_icon="🤖", layout="wide")
 
@@ -42,6 +42,7 @@ def build_user_message(question: str, cls: str, subject: str, medium: str) -> st
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
+show_gov_banner()
 st.markdown("# 🤖 AI Tutor (AI Shikshak)")
 st.markdown("Koi bhi sawal pucho — AI step-by-step samjhayega!")
 st.divider()
@@ -87,6 +88,8 @@ if not st.session_state.tutor_messages:
             st.rerun()
 
 if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected_subject})"):
+    if not check_rate_limit():
+        st.stop()
     user_msg = build_user_message(prompt, selected_class, selected_subject, medium)
     st.session_state.tutor_messages.append({"role": "user", "content": user_msg})
     with st.chat_message("user", avatar="🧑‍🎓"):
@@ -100,6 +103,7 @@ if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected
                 placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
             log_usage("AI Tutor", selected_subject, prompt[:80])
+            show_gov_footer()
         except Exception as e:
             show_api_error(e)
     st.session_state.tutor_messages.append({"role": "assistant", "content": full_text})

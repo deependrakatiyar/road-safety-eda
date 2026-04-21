@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit
 
 st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
 
@@ -56,6 +56,7 @@ def stream_questions(cls, subject, topic, q_type, medium):
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
+show_gov_banner()
 st.markdown("# ⭐ Important Questions")
 st.markdown("MP Board exam mein aane wale most important questions — hints ke saath!")
 st.divider()
@@ -85,6 +86,8 @@ if generate_btn:
     if not topic.strip():
         st.error("Chapter ya topic ka naam likhein!")
     else:
+        if not check_rate_limit():
+            st.stop()
         st.session_state.iq_config  = {"class": selected_class, "subject": selected_subject,
                                         "topic": topic, "type": q_type, "medium": medium}
         st.session_state.iq_content = ""

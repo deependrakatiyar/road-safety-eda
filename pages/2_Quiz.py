@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import json
 import re
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage
+from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
 
@@ -45,6 +45,7 @@ def score_color(score, total):
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
+show_gov_banner()
 st.markdown("# ❓ Quiz Practice")
 st.markdown("MP Board pattern mein MCQ practice karo!")
 st.divider()
@@ -73,6 +74,8 @@ if generate_btn:
     if not topic.strip():
         st.error("Please topic ya chapter ka naam likhein!")
     else:
+        if not check_rate_limit():
+            st.stop()
         with st.spinner(f"Quiz generate ho raha hai... {selected_class} | {selected_subject} | {topic}"):
             try:
                 questions = generate_quiz(selected_class, selected_subject, topic, num_questions, difficulty, medium)

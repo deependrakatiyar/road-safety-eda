@@ -62,6 +62,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Government banner
+st.markdown("""
+<div style="background:linear-gradient(90deg,#003087,#0057b8);color:white;
+            padding:10px 18px;border-radius:8px;margin-bottom:16px;
+            display:flex;align-items:center;justify-content:space-between;">
+  <div>
+    <div style="font-size:.7rem;opacity:.8;letter-spacing:.5px;">AN INITIATIVE BY</div>
+    <div style="font-weight:700;font-size:.95rem;">District Administration Raisen &nbsp;|&nbsp; NIC (National Informatics Centre)</div>
+    <div style="font-size:.68rem;opacity:.75;">Madhya Pradesh Government &nbsp;·&nbsp; Digital India</div>
+  </div>
+  <div style="font-size:1.8rem;">🏛️ 🇮🇳</div>
+</div>""", unsafe_allow_html=True)
+
 # Header
 st.markdown('<div class="main-title">📚 Padhai AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">MP Board School Students ke liye AI-Powered Study Platform | Class 6 se 12</div>', unsafe_allow_html=True)
@@ -156,9 +169,10 @@ st.divider()
 
 # Footer
 st.markdown("""
-<div style="text-align:center; color:#888; font-size:0.9rem; padding:10px 0;">
-    📚 <strong>Padhai AI</strong> — MP Board Students ke liye, AI ki Shakti ke Saath<br>
-    Powered by Claude AI | Made with ❤️ for MP Board Students
+<div style="text-align:center;color:#777;font-size:0.8rem;padding:12px 0;
+            border-top:1px solid #e0e0e0;margin-top:8px;">
+    An initiative by <strong>District Administration Raisen</strong> &nbsp;|&nbsp; NIC MP &nbsp;|&nbsp; 🇮🇳 Digital India<br>
+    <strong style="color:#003087;">Padhai AI</strong> — MP Board Students ke liye AI ki Shakti ke Saath
 </div>
 """, unsafe_allow_html=True)
 
