@@ -55,21 +55,26 @@ if not (_secret("SUPABASE_URL") and _secret("SUPABASE_KEY")):
 
 with st.sidebar:
     st.markdown("### 📅 Date Filter")
-    preset = st.selectbox("Period", ["Last 7 Days", "Last 30 Days", "Last 90 Days", "All Time"])
+    preset = st.selectbox("Period", ["All Time", "Last 7 Days", "Last 30 Days", "Last 90 Days"])
     if preset == "Last 7 Days":
-        d_from = date.today() - timedelta(days=7)
+        default_from = date.today() - timedelta(days=7)
     elif preset == "Last 30 Days":
-        d_from = date.today() - timedelta(days=30)
+        default_from = date.today() - timedelta(days=30)
     elif preset == "Last 90 Days":
-        d_from = date.today() - timedelta(days=90)
+        default_from = date.today() - timedelta(days=90)
     else:
-        d_from = date(2024, 1, 1)
+        default_from = date(2024, 1, 1)
 
-    d_from, d_to = st.date_input("Custom Range", value=(d_from, date.today()),
-                                  min_value=date(2024, 1, 1), max_value=date.today())
+    date_range = st.date_input("Custom Range", value=(default_from, date.today()),
+                               min_value=date(2024, 1, 1), max_value=date.today())
+    # date_input can return a single date or a tuple — handle both
+    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+        d_from, d_to = date_range
+    else:
+        d_from, d_to = default_from, date.today()
+
     st.divider()
     if st.button("🔄 Refresh Data", use_container_width=True):
-        st.cache_data.clear()
         st.rerun()
     if st.button("🚪 Logout", use_container_width=True):
         st.session_state.admin_auth = False
@@ -85,11 +90,20 @@ def to_df(rows):
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows)
-    df["created_at"] = pd.to_datetime(df["created_at"], utc=True).dt.tz_localize(None)
+    # Strip timezone safely: parse as UTC then convert to naive
+    df["created_at"] = (pd.to_datetime(df["created_at"], utc=True)
+                          .dt.tz_convert(None))
     return df
 
 reg_df_all   = to_df(regs)
 usage_df_all = to_df(usage)
+
+# Debug: show raw fetch counts
+with st.sidebar:
+    st.divider()
+    st.caption(f"DB: {len(regs)} registrations, {len(usage)} usage logs fetched")
+    if not regs and not usage:
+        st.warning("⚠️ Supabase returned 0 rows. Check secrets + Run Connection Test below.")
 
 def filter_df(df):
     if df.empty:
