@@ -197,6 +197,28 @@ if not usage_df.empty:
     disp["Time"] = disp["Time"].dt.strftime("%d %b %H:%M")
     st.dataframe(disp.head(100), use_container_width=True, hide_index=True)
 
+# ── Data quality audit ───────────────────────────────────────────────────────
+
+st.divider()
+st.markdown("### 🔬 Data Quality Audit")
+if not usage_df.empty:
+    has_audit = all(c in usage_df.columns for c in ["valid_input", "ai_called", "response_valid"])
+    if has_audit:
+        a1, a2, a3 = st.columns(3)
+        valid_pct    = int(usage_df["valid_input"].fillna(True).mean() * 100)
+        ai_pct       = int(usage_df["ai_called"].fillna(True).mean() * 100)
+        resp_pct     = int(usage_df["response_valid"].fillna(True).mean() * 100)
+        a1.metric("✅ Valid Inputs",       f"{valid_pct}%",
+                  help="% of requests that passed input validation")
+        a2.metric("🤖 AI Actually Called", f"{ai_pct}%",
+                  help="% of valid requests that reached the AI")
+        a3.metric("🔒 Clean Responses",   f"{resp_pct}%",
+                  help="% of AI responses with no cross-subject contamination detected")
+    else:
+        st.info("Run the SQL in the Security expander below to add audit columns, then this section will populate.")
+else:
+    st.caption("No usage data in selected period.")
+
 # ── Downloads ─────────────────────────────────────────────────────────────────
 
 st.divider()
@@ -230,7 +252,14 @@ with st.expander("📄 Preview Impact Report (for District Collector / Presentat
 
 st.divider()
 with st.expander("🛡️ Security & Supabase RLS — Run this SQL in Supabase"):
-    st.markdown("**Enable Row Level Security** — prevents students from reading others' data:")
+    st.markdown("**Step 1 — Add audit columns** (run once after deploying this version):")
+    st.code("""
+-- Add audit/quality tracking columns to usage_logs
+ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS valid_input    boolean DEFAULT true;
+ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS ai_called      boolean DEFAULT true;
+ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS response_valid boolean DEFAULT true;
+""", language="sql")
+    st.markdown("**Step 2 — Enable Row Level Security** — prevents students from reading others' data:")
     st.code("""
 -- Enable RLS on both tables
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
@@ -246,7 +275,7 @@ CREATE POLICY "insert_only_log"
 -- Block all SELECT for anon (admin reads via service_role key)
 -- No SELECT policy = no read access for anon key
 """, language="sql")
-    st.warning("⚠️ After running this, use `SUPABASE_SERVICE_KEY` (not anon key) in admin dashboard to read data.")
+    st.warning("⚠️ After enabling RLS, use `SUPABASE_SERVICE_KEY` (not anon key) in admin dashboard to read data.")
 
 # ── Functionality checklist ───────────────────────────────────────────────────
 

@@ -1,47 +1,25 @@
 import streamlit as st
-import os
 import json
-import re
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit, show_disclaimer
+from utils import (require_api_key, show_api_error, ensure_registered,
+                   log_usage, show_gov_banner, show_gov_footer,
+                   check_rate_limit, show_disclaimer)
+from validation import CLASSES, SUBJECTS, validate_input, check_response_contamination
+from ai_engine import generate_json
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
 
-CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"]
-SUBJECTS = {
-    "Class 6":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 7":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 8":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 9":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 10": ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 11": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-    "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-}
 
-QUIZ_PROMPT = """Generate {num_questions} MCQs for MP Board {cls} {subject}, topic: {topic}.
-Difficulty: {difficulty}. Language: {medium} (Hindi = Devanagari script).
-
-Return ONLY valid JSON: {{"questions":[{{"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct":"A","explanation":"1-line reason"}}]}}"""
-
-def generate_quiz(cls, subject, topic, num_q, difficulty, medium) -> list:
-    prompt = QUIZ_PROMPT.format(
-        num_questions=num_q, cls=cls, subject=subject,
-        topic=topic, difficulty=difficulty, medium=medium,
-    )
-    response = get_client().chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        max_tokens=2000,
-    )
-    raw = response.choices[0].message.content.strip()
+def _parse_quiz(raw: str) -> list:
     data = json.loads(raw)
     return data.get("questions", data) if isinstance(data, dict) else data
+
 
 def score_color(score, total):
     pct = score / total * 100
     if pct >= 80: return "green"
     if pct >= 50: return "orange"
     return "red"
+
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -71,23 +49,44 @@ if "quiz_submitted" not in st.session_state: st.session_state.quiz_submitted = F
 if "quiz_config"    not in st.session_state: st.session_state.quiz_config    = {}
 
 if generate_btn:
-    if not topic.strip():
-        st.error("Please topic ya chapter ka naam likhein!")
+    # Validate before calling AI
+    valid, err = validate_input(selected_subject, topic, selected_class)
+    if not valid:
+        st.error(f"❌ {err}")
+        log_usage("Quiz", selected_subject, topic,
+                  valid_input=False, ai_called=False, response_valid=False)
     else:
         if not check_rate_limit():
             st.stop()
         with st.spinner(f"Quiz generate ho raha hai... {selected_class} | {selected_subject} | {topic}"):
+            response_valid = True
             try:
-                questions = generate_quiz(selected_class, selected_subject, topic, num_questions, difficulty, medium)
+                raw = generate_json(
+                    cls=selected_class, subject=selected_subject,
+                    topic=topic, medium=medium,
+                    extra={"n": num_questions, "difficulty": difficulty},
+                )
+                # Contamination check on raw JSON text
+                clean, warn = check_response_contamination(selected_subject, raw)
+                if not clean:
+                    response_valid = False
+                    st.warning(f"⚠️ {warn}")
+
+                questions = _parse_quiz(raw)
                 st.session_state.quiz_questions = questions
                 st.session_state.quiz_answers   = {}
                 st.session_state.quiz_submitted = False
-                st.session_state.quiz_config    = {"class": selected_class, "subject": selected_subject,
-                                                    "topic": topic, "difficulty": difficulty, "medium": medium}
-                log_usage("Quiz", selected_subject, topic)
+                st.session_state.quiz_config    = {
+                    "class": selected_class, "subject": selected_subject,
+                    "topic": topic, "difficulty": difficulty, "medium": medium,
+                }
+                log_usage("Quiz", selected_subject, topic,
+                          valid_input=True, ai_called=True, response_valid=response_valid)
                 st.rerun()
             except Exception as e:
                 show_api_error(e)
+                log_usage("Quiz", selected_subject, topic,
+                          valid_input=True, ai_called=True, response_valid=False)
 
 if st.session_state.quiz_questions:
     cfg = st.session_state.quiz_config

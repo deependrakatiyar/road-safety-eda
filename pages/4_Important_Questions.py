@@ -1,19 +1,10 @@
 import streamlit as st
-import os
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit, show_disclaimer
+from utils import (require_api_key, show_api_error, ensure_registered,
+                   log_usage, show_gov_banner, check_rate_limit, show_disclaimer)
+from validation import CLASSES, SUBJECTS, validate_input, check_response_contamination
+from ai_engine import stream_content
 
 st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
-
-CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"]
-SUBJECTS = {
-    "Class 6":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 7":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 8":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 9":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 10": ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 11": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-    "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-}
 
 QUESTION_TYPES = {
     "All Types (Sabhi)":              "Include all types: 1-mark, 2-mark, 3-mark, 5-mark, and essay questions",
@@ -23,7 +14,7 @@ QUESTION_TYPES = {
     "Essay / Nibandh (6-8 Marks)":    "Long essay type questions for Hindi and language subjects",
     "Numerical / Practical Problems": "Calculation-based and application problems (for Science, Math)",
 }
-TYPE_INSTRUCTIONS = {
+_Q_INSTRUCTIONS = {
     "All Types (Sabhi)":              "mix 1-mark, 2-3 mark, 4-5 mark questions",
     "1 Mark (Objective)":             "definitions, one-word, fill in blanks, true/false",
     "2-3 Mark (Short Answer)":        "explain/describe/differentiate type",
@@ -31,28 +22,6 @@ TYPE_INSTRUCTIONS = {
     "Essay / Nibandh (6-8 Marks)":    "essay writing, nibandh",
     "Numerical / Practical Problems": "solve/calculate/application problems",
 }
-IMP_Q_PROMPT = """MP Board {cls} {subject}, topic: {topic}. Language: {medium_lang}.
-Generate 12 important exam questions ({q_type}). Focus: {type_instruction}.
-
-Format each as:
-**Q[N]. [question]** ([marks] marks) [⭐/⭐⭐/⭐⭐⭐]
-💡 Hint: [1-line hint]
----"""
-
-def stream_questions(cls, subject, topic, q_type, medium):
-    medium_lang = "Hindi (Devanagari script)" if medium == "Hindi Medium" else "English"
-    prompt = IMP_Q_PROMPT.format(cls=cls, subject=subject, topic=topic, q_type=q_type,
-                                  medium_lang=medium_lang, type_instruction=TYPE_INSTRUCTIONS.get(q_type, ""))
-    stream = get_client().chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        stream=True,
-        max_tokens=1200,
-    )
-    for chunk in stream:
-        text = chunk.choices[0].delta.content
-        if text:
-            yield text
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -83,8 +52,11 @@ if "iq_content" not in st.session_state: st.session_state.iq_content = ""
 if "iq_config"   not in st.session_state: st.session_state.iq_config  = {}
 
 if generate_btn:
-    if not topic.strip():
-        st.error("Chapter ya topic ka naam likhein!")
+    valid, err = validate_input(selected_subject, topic, selected_class)
+    if not valid:
+        st.error(f"❌ {err}")
+        log_usage("Important Questions", selected_subject, topic,
+                  valid_input=False, ai_called=False, response_valid=False)
     else:
         if not check_rate_limit():
             st.stop()
@@ -99,17 +71,32 @@ if generate_btn:
         st.divider()
         placeholder = st.empty()
         full_text   = ""
+        response_valid = True
         try:
             with st.spinner("Important questions dhundhe ja rahe hain..."):
-                for chunk in stream_questions(selected_class, selected_subject, topic, q_type, medium):
+                for chunk in stream_content(
+                    cls=selected_class, subject=selected_subject,
+                    topic=topic, medium=medium, feature="Important Questions",
+                    extra={"q_type": q_type,
+                           "type_instruction": _Q_INSTRUCTIONS.get(q_type, "")},
+                    max_tokens=1200,
+                ):
                     full_text += chunk
                     placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
+
+            clean, warn = check_response_contamination(selected_subject, full_text)
+            if not clean:
+                response_valid = False
+                st.warning(f"⚠️ {warn}")
         except Exception as e:
             show_api_error(e)
+            response_valid = False
             st.stop()
+
         st.session_state.iq_content = full_text
-        log_usage("Important Questions", selected_subject, topic)
+        log_usage("Important Questions", selected_subject, topic,
+                  valid_input=True, ai_called=True, response_valid=response_valid)
         show_disclaimer()
         st.divider()
         col1, col2 = st.columns(2)

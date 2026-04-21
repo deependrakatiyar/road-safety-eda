@@ -1,19 +1,10 @@
 import streamlit as st
-import os
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit, show_disclaimer
+from utils import (require_api_key, show_api_error, ensure_registered,
+                   log_usage, show_gov_banner, check_rate_limit, show_disclaimer)
+from validation import CLASSES, SUBJECTS, validate_input, check_response_contamination
+from ai_engine import stream_content
 
 st.set_page_config(page_title="Study Notes - Padhai AI", page_icon="📝", layout="wide")
-
-CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"]
-SUBJECTS = {
-    "Class 6":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 7":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 8":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 9":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 10": ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 11": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-    "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-}
 
 NOTE_TYPES = {
     "Summary Notes (Saar)":      "Concise chapter summary with key points",
@@ -22,32 +13,13 @@ NOTE_TYPES = {
     "Revision Notes (Revision)": "Quick revision bullet points for last-minute prep",
     "Mind Map (Diagram Style)":  "Topic breakdown in hierarchical structure",
 }
-TYPE_INSTRUCTIONS = {
-    "Summary Notes (Saar)":      "concise 300-400 word summary of all major concepts",
-    "Detailed Notes (Vistrit)":  "comprehensive notes with explanations, examples, sub-topics (600-800 words)",
-    "Formula Sheet (Sutre)":     "only formulas, definitions, key terms — use tables where helpful",
-    "Revision Notes (Revision)": "bullet-point revision notes, 1-line each, exam-focused",
-    "Mind Map (Diagram Style)":  "hierarchical text mind map using indentation",
+_NOTE_INSTRUCTIONS = {
+    "Summary Notes (Saar)":      "Concise 300-400 word summary covering all major concepts",
+    "Detailed Notes (Vistrit)":  "Comprehensive notes with explanations, examples, sub-topics (600-800 words)",
+    "Formula Sheet (Sutre)":     "Only formulas, definitions, key terms — use tables where helpful",
+    "Revision Notes (Revision)": "Bullet-point revision notes, 1-line each, exam-focused",
+    "Mind Map (Diagram Style)":  "Hierarchical text mind map using indentation and symbols",
 }
-NOTES_PROMPT = """MP Board {cls} {subject} — create {note_type} for topic: {topic}.
-Instructions: {type_instruction}. Language: {medium_lang}.
-Use ## headings, **bold** key terms, ``` for formulas. End with 'Yaad Rakho' (5 key points)."""
-
-def stream_notes(cls, subject, topic, note_type, medium):
-    medium_lang = "Hindi (Devanagari script)" if medium == "Hindi Medium" else "English"
-    prompt = NOTES_PROMPT.format(cls=cls, subject=subject, topic=topic,
-                                  note_type=note_type, medium_lang=medium_lang,
-                                  type_instruction=TYPE_INSTRUCTIONS.get(note_type, ""))
-    stream = get_client().chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        stream=True,
-        max_tokens=1200,
-    )
-    for chunk in stream:
-        text = chunk.choices[0].delta.content
-        if text:
-            yield text
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -76,8 +48,11 @@ if "notes_content" not in st.session_state: st.session_state.notes_content = ""
 if "notes_config"  not in st.session_state: st.session_state.notes_config  = {}
 
 if generate_btn:
-    if not topic.strip():
-        st.error("Chapter ya topic ka naam likhein!")
+    valid, err = validate_input(selected_subject, topic, selected_class)
+    if not valid:
+        st.error(f"❌ {err}")
+        log_usage("Notes", selected_subject, topic,
+                  valid_input=False, ai_called=False, response_valid=False)
     else:
         if not check_rate_limit():
             st.stop()
@@ -89,17 +64,31 @@ if generate_btn:
         st.divider()
         placeholder = st.empty()
         full_text   = ""
+        response_valid = True
         try:
             with st.spinner("Notes generate ho rahi hain..."):
-                for chunk in stream_notes(selected_class, selected_subject, topic, note_type, medium):
+                for chunk in stream_content(
+                    cls=selected_class, subject=selected_subject,
+                    topic=topic, medium=medium, feature="Notes",
+                    extra={"note_type_instruction": _NOTE_INSTRUCTIONS[note_type]},
+                    max_tokens=1200,
+                ):
                     full_text += chunk
                     placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
+
+            clean, warn = check_response_contamination(selected_subject, full_text)
+            if not clean:
+                response_valid = False
+                st.warning(f"⚠️ {warn}")
         except Exception as e:
             show_api_error(e)
+            response_valid = False
             st.stop()
+
         st.session_state.notes_content = full_text
-        log_usage("Notes", selected_subject, topic)
+        log_usage("Notes", selected_subject, topic,
+                  valid_input=True, ai_called=True, response_valid=response_valid)
         show_disclaimer()
         st.divider()
         st.success("✅ Notes ready!")

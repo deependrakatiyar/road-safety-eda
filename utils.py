@@ -212,17 +212,22 @@ def ensure_registered() -> bool:
 
 # ── Usage logging ─────────────────────────────────────────────────────────────
 
-def log_usage(feature: str, subject: str = "", topic: str = ""):
+def log_usage(feature: str, subject: str = "", topic: str = "",
+              *, valid_input: bool = True, ai_called: bool = True,
+              response_valid: bool = True):
     user = st.session_state.get("user_info", {})
     _sb_post("usage_logs", {
-        "user_name":   user.get("name", "Anonymous"),
-        "user_class":  user.get("class", ""),
-        "school_name": user.get("school_name", ""),
-        "district":    user.get("district", ""),
-        "feature":     feature,
-        "subject":     subject,
-        "topic":       topic[:200],
-        "session_id":  user.get("session_id", ""),
+        "user_name":      user.get("name", "Anonymous"),
+        "user_class":     user.get("class", ""),
+        "school_name":    user.get("school_name", ""),
+        "district":       user.get("district", ""),
+        "feature":        feature,
+        "subject":        subject,
+        "topic":          topic[:200],
+        "session_id":     user.get("session_id", ""),
+        "valid_input":    valid_input,
+        "ai_called":      ai_called,
+        "response_valid": response_valid,
     })
 
 # ── Impact report ─────────────────────────────────────────────────────────────

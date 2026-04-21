@@ -1,44 +1,13 @@
 import streamlit as st
-import os
-from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage, show_gov_banner, show_gov_footer, check_rate_limit, show_disclaimer
+from utils import (require_api_key, show_api_error, ensure_registered,
+                   log_usage, show_gov_banner, show_gov_footer,
+                   check_rate_limit, show_disclaimer)
+from validation import CLASSES, SUBJECTS, validate_input, check_response_contamination
+from ai_engine import stream_content
 
 st.set_page_config(page_title="AI Tutor - Padhai AI", page_icon="🤖", layout="wide")
 
-CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"]
-SUBJECTS = {
-    "Class 6":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 7":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 8":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit"],
-    "Class 9":  ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 10": ["Hindi", "English", "Mathematics", "Science", "Social Science", "Sanskrit", "Computer Science"],
-    "Class 11": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-    "Class 12": ["Hindi", "English", "Physics", "Chemistry", "Mathematics", "Biology", "History", "Geography", "Political Science", "Economics", "Business Studies", "Accountancy", "Computer Science"],
-}
-
-SYSTEM_PROMPT = """You are Padhai AI, an MP Board tutor (Class 6-12).
-- Answer in Hindi if student writes in Hindi, else English.
-- Step-by-step explanations; bold key terms and formulas.
-- Keep answers concise but complete. End with one follow-up question."""
-
 MAX_HISTORY = 6
-
-def stream_response(messages: list):
-    trimmed = messages[-MAX_HISTORY:]
-    groq_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for m in trimmed:
-        role = "user" if m["role"] == "user" else "assistant"
-        groq_msgs.append({"role": role, "content": m["content"]})
-    stream = get_client().chat.completions.create(
-        model=MODEL, messages=groq_msgs, stream=True, max_tokens=800,
-    )
-    for chunk in stream:
-        text = chunk.choices[0].delta.content
-        if text:
-            yield text
-
-def build_user_message(question: str, cls: str, subject: str, medium: str) -> str:
-    lang = "Respond in Hindi (Devanagari)." if medium == "Hindi Medium" else "Respond in English."
-    return f"[{cls} | {subject}] {lang}\n{question}"
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -67,6 +36,7 @@ if not ensure_registered():
 if "tutor_messages" not in st.session_state:
     st.session_state.tutor_messages = []
 
+# Display chat history
 for msg in st.session_state.tutor_messages:
     avatar = "🧑‍🎓" if msg["role"] == "user" else "🤖"
     with st.chat_message(msg["role"], avatar=avatar):
@@ -77,6 +47,9 @@ if not st.session_state.tutor_messages:
     suggestions = {
         "Mathematics": ["Pythagoras theorem kya hai?", "Quadratic equation solve kaise karte hain?", "Trigonometry ke basic formulas kya hain?"],
         "Science":     ["Photosynthesis kya hoti hai?", "Newton ke teen laws explain karo", "Atom aur molecule mein kya farak hai?"],
+        "Physics":     ["Newton ke laws of motion explain karo", "Ohm's law kya hai?", "Refraction of light kya hota hai?"],
+        "Chemistry":   ["Periodic table kya hai?", "Acid aur base mein kya farak hai?", "Chemical bonding explain karo"],
+        "Biology":     ["Cell kya hoti hai?", "Photosynthesis ka process explain karo", "DNA kya hota hai?"],
         "Hindi":       ["Samas kya hota hai? Uske prakar batao", "Ras kise kehte hain?", "Kriya ke bhed batao"],
         "History":     ["1857 ki kranti ke karan kya the?", "Mughal samrajya kab sthapit hua?", "Gandhi ji ka yogdan batao"],
         "English":     ["What is a figure of speech?", "Explain active and passive voice", "What are types of sentences?"],
@@ -88,23 +61,55 @@ if not st.session_state.tutor_messages:
             st.rerun()
 
 if prompt := st.chat_input(f"Apna sawal likhein... ({selected_class} | {selected_subject})"):
+    # Validate: sanitise query; max 800 chars for conversational questions
+    valid, err = validate_input(selected_subject, prompt, selected_class, max_len=800)
+    if not valid:
+        st.error(f"❌ {err}")
+        log_usage("AI Tutor", selected_subject, prompt[:80],
+                  valid_input=False, ai_called=False, response_valid=False)
+        st.stop()
+
     if not check_rate_limit():
         st.stop()
-    user_msg = build_user_message(prompt, selected_class, selected_subject, medium)
-    st.session_state.tutor_messages.append({"role": "user", "content": user_msg})
+
+    st.session_state.tutor_messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="🧑‍🎓"):
         st.markdown(prompt)
+
+    # Build trimmed history for the AI (includes the message we just appended)
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in st.session_state.tutor_messages[-MAX_HISTORY:]
+    ]
+
     with st.chat_message("assistant", avatar="🤖"):
         placeholder = st.empty()
         full_text = ""
+        response_valid = True
         try:
-            for chunk in stream_response(st.session_state.tutor_messages):
+            for chunk in stream_content(
+                cls=selected_class, subject=selected_subject,
+                topic=prompt, medium=medium, feature="AI Tutor",
+                history=history, max_tokens=800,
+            ):
                 full_text += chunk
                 placeholder.markdown(full_text + "▌")
             placeholder.markdown(full_text)
+
+            # Soft cross-subject contamination check
+            clean, warn = check_response_contamination(selected_subject, full_text)
+            if not clean:
+                response_valid = False
+                st.caption(f"⚠️ {warn}")
+
             show_disclaimer()
-            log_usage("AI Tutor", selected_subject, prompt[:80])
             show_gov_footer()
         except Exception as e:
             show_api_error(e)
-    st.session_state.tutor_messages.append({"role": "assistant", "content": full_text})
+            response_valid = False
+
+        log_usage("AI Tutor", selected_subject, prompt[:80],
+                  valid_input=True, ai_called=True, response_valid=response_valid)
+
+    if full_text:
+        st.session_state.tutor_messages.append({"role": "assistant", "content": full_text})

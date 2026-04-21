@@ -1,0 +1,118 @@
+"""
+Padhai AI — Centralized NCERT-Aligned AI Engine.
+All AI calls go through this module to enforce academic correctness.
+"""
+from typing import Optional, Generator
+from utils import MODEL, get_client
+
+_SYSTEM_TEMPLATE = (
+    "You are Padhai AI, an NCERT-certified academic assistant for MP Board students.\n\n"
+    "Assignment:\n"
+    "  Class  : {cls}\n"
+    "  Subject: {subject}\n"
+    "  Language: {medium_instruction}\n\n"
+    "STRICT RULES:\n"
+    "1. Generate content ONLY about {subject} — refuse out-of-subject requests.\n"
+    "2. Follow MP Board / NCERT {cls} syllabus strictly; no out-of-syllabus content.\n"
+    "3. Do NOT fabricate facts, formulas, dates, or examples not in the curriculum.\n"
+    "4. If the topic is completely outside {subject} scope, respond exactly: INVALID INPUT\n"
+    "5. Keep all explanations age-appropriate and clear for {cls} students."
+)
+
+_FEATURE_INSTRUCTIONS: dict = {
+    "AI Tutor": (
+        "Explain the following question step-by-step with clear examples.\n"
+        "- Bold **key terms** and use `code blocks` for formulas.\n"
+        "- Keep the answer focused and concise (max ~500 words).\n"
+        "- End with ONE follow-up question to check the student's understanding."
+    ),
+    "Quiz": (
+        "Generate {n} multiple-choice questions (MCQs) for the given topic.\n"
+        "Return ONLY valid JSON — no markdown, no extra text:\n"
+        '{{"questions":[{{"question":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},'
+        '"correct":"A","explanation":"1-line reason"}}]}}'
+    ),
+    "Notes": (
+        "{note_type_instruction}\n"
+        "Format: ## headings, **bold** key terms, `formulas` in code blocks, "
+        "tables where useful.\n"
+        "End with a '## Yaad Rakho' section listing exactly 5 key takeaways."
+    ),
+    "Important Questions": (
+        "List 12 important MP Board exam questions ({q_type}).\n"
+        "Format each exactly as:\n"
+        "**Q[N]. [question]** ([marks] marks) [⭐/⭐⭐/⭐⭐⭐]\n"
+        "💡 Hint: [1-line exam tip]\n"
+        "---"
+    ),
+}
+
+
+def _build_messages(cls: str, subject: str, topic: str, medium: str,
+                    feature: str, extra: Optional[dict] = None,
+                    history: Optional[list] = None) -> list:
+    med_instr = (
+        "Hindi — write all content in Devanagari script"
+        if medium == "Hindi Medium"
+        else "English"
+    )
+    system_content = _SYSTEM_TEMPLATE.format(
+        cls=cls, subject=subject, medium_instruction=med_instr
+    )
+
+    feat_instr = _FEATURE_INSTRUCTIONS.get(feature, "Provide accurate educational content.")
+    if extra:
+        try:
+            feat_instr = feat_instr.format(**extra)
+        except KeyError:
+            pass
+
+    user_content = (
+        f"Class: {cls}\n"
+        f"Subject: {subject}\n"
+        f"Topic: {topic}\n\n"
+        f"{feat_instr}"
+    )
+
+    messages = [{"role": "system", "content": system_content}]
+    if history:
+        # AI Tutor multi-turn: history already contains the latest user message
+        messages.extend(history)
+    else:
+        messages.append({"role": "user", "content": user_content})
+    return messages
+
+
+def stream_content(cls: str, subject: str, topic: str, medium: str,
+                   feature: str = "AI Tutor",
+                   extra: Optional[dict] = None,
+                   history: Optional[list] = None,
+                   max_tokens: int = 1000) -> Generator:
+    """
+    Streaming generator for AI Tutor, Notes, and Important Questions.
+    Raises on API error — caller is responsible for handling.
+    """
+    messages = _build_messages(cls, subject, topic, medium, feature, extra, history)
+    stream = get_client().chat.completions.create(
+        model=MODEL, messages=messages, stream=True, max_tokens=max_tokens,
+    )
+    for chunk in stream:
+        text = chunk.choices[0].delta.content
+        if text:
+            yield text
+
+
+def generate_json(cls: str, subject: str, topic: str, medium: str,
+                  extra: Optional[dict] = None) -> str:
+    """
+    Non-streaming JSON mode call for Quiz generation.
+    Returns raw JSON string. Raises on API error — caller handles.
+    """
+    messages = _build_messages(cls, subject, topic, medium, "Quiz", extra)
+    response = get_client().chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        response_format={"type": "json_object"},
+        max_tokens=2000,
+    )
+    return response.choices[0].message.content.strip()
