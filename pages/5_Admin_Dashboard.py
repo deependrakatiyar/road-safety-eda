@@ -1,15 +1,13 @@
 import streamlit as st
 import os
-import sys
 import pandas as pd
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import _sb_get, run_connection_test
+from utils import _sb_get, run_connection_test, _secret
 
 st.set_page_config(page_title="Admin Dashboard - Padhai AI", page_icon="📊", layout="wide")
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "nic_raisen_2024")
+ADMIN_PASS = _secret("ADMIN_PASSWORD") or "nic_raisen_2024"
 
 if not st.session_state.get("admin_auth"):
     st.markdown("## 🔐 Admin Login — NIC Raisen DIO")
@@ -28,7 +26,7 @@ st.markdown("# 📊 Padhai AI — Impact Dashboard")
 st.markdown("**NIC Raisen DIO | Real-time Usage Analytics**")
 st.divider()
 
-if not (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_KEY")):
+if not (_secret("SUPABASE_URL") and _secret("SUPABASE_KEY")):
     st.warning("⚠️ Supabase credentials missing. `SUPABASE_URL` aur `SUPABASE_KEY` secrets mein add karo.")
     st.markdown("""
     **Setup karne ke liye:**

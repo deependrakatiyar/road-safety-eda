@@ -1,7 +1,5 @@
 import streamlit as st
 import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from utils import MODEL, get_client, require_api_key, show_api_error, ensure_registered, log_usage
 
 st.set_page_config(page_title="Study Notes - Padhai AI", page_icon="📝", layout="wide")
