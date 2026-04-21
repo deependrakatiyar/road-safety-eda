@@ -3,7 +3,7 @@ import os
 import sys
 import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils import _sb_get
+from utils import _sb_get, run_connection_test
 
 st.set_page_config(page_title="Admin Dashboard - Padhai AI", page_icon="📊", layout="wide")
 
@@ -157,6 +157,31 @@ with col2:
         st.download_button("⬇️ Download Usage Logs CSV",
                            data=usage_df.to_csv(index=False),
                            file_name="padhai_ai_usage.csv", mime="text/csv")
+
+# ── Connection test ───────────────────────────────────────────────────────────
+
+st.divider()
+st.markdown("### 🔌 Supabase Connection Test")
+if st.button("Run Test (inserts 1 dummy row in each table)"):
+    with st.spinner("Testing..."):
+        res = run_connection_test()
+    col1, col2 = st.columns(2)
+    col1.metric("registrations table", "✅ OK" if res["registration"] else "❌ FAIL")
+    col2.metric("usage_logs table",    "✅ OK" if res["usage_log"]    else "❌ FAIL")
+    if res["error"]:
+        st.error(res["error"])
+    else:
+        st.success("Connection working. Dummy rows inserted — visible in Recent Activity Log above.")
+
+    st.markdown("**Last 3 registrations:**")
+    rows = _sb_get("registrations", limit=3)
+    if rows:
+        st.dataframe(pd.DataFrame(rows)[["created_at","name","class","school_name","district"]], hide_index=True)
+
+    st.markdown("**Last 3 usage logs:**")
+    logs = _sb_get("usage_logs", limit=3)
+    if logs:
+        st.dataframe(pd.DataFrame(logs)[["created_at","user_name","user_class","feature","subject","topic"]], hide_index=True)
 
 if st.sidebar.button("🚪 Logout"):
     st.session_state.admin_auth = False

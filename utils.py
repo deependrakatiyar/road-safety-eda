@@ -121,7 +121,49 @@ def ensure_registered() -> bool:
         st.rerun()
     return False
 
-def log_usage(feature: str, subject: str = "", topic: str = ""):
+def run_connection_test() -> dict:
+    """Insert one dummy record in each table, fetch it back. Returns status dict."""
+    result = {"registration": False, "usage_log": False, "error": ""}
+    try:
+        test_reg = {
+            "name": "Test Student", "class": "Class 10",
+            "school_name": "Test School", "district": "Raisen",
+            "session_id": "test_000",
+        }
+        url, key = _sb_url(), _sb_key()
+        if not url or not key:
+            result["error"] = "SUPABASE_URL / SUPABASE_KEY missing in secrets"
+            return result
+
+        r1 = _req.post(
+            f"{url}/rest/v1/registrations",
+            headers={"apikey": key, "Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json", "Prefer": "return=minimal"},
+            json=test_reg, timeout=5,
+        )
+        result["registration"] = r1.status_code in (200, 201)
+
+        test_log = {
+            "user_name": "Test Student", "user_class": "Class 10",
+            "school_name": "Test School", "district": "Raisen",
+            "feature": "Connection Test", "subject": "Test",
+            "topic": "Supabase Integration Test", "session_id": "test_000",
+        }
+        r2 = _req.post(
+            f"{url}/rest/v1/usage_logs",
+            headers={"apikey": key, "Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json", "Prefer": "return=minimal"},
+            json=test_log, timeout=5,
+        )
+        result["usage_log"] = r2.status_code in (200, 201)
+
+        if not result["registration"]:
+            result["error"] = f"registrations insert failed: HTTP {r1.status_code} — {r1.text[:200]}"
+        elif not result["usage_log"]:
+            result["error"] = f"usage_logs insert failed: HTTP {r2.status_code} — {r2.text[:200]}"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
     user = st.session_state.get("user_info", {})
     _sb_post("usage_logs", {
         "user_name":   user.get("name", "Anonymous"),
