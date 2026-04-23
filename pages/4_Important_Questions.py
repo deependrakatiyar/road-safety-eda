@@ -1,7 +1,8 @@
 import streamlit as st
 from utils import (require_api_key, show_api_error, ensure_registered,
                    log_usage, show_gov_banner, check_rate_limit, show_disclaimer)
-from validation import CLASSES, SUBJECTS, validate_input, check_response_contamination
+from validation import (CLASSES, SUBJECTS, validate_input,
+                        check_topic_relevance, check_response_contamination)
 from ai_engine import stream_content
 
 st.set_page_config(page_title="Important Questions - Padhai AI", page_icon="⭐", layout="wide")
@@ -52,58 +53,66 @@ if "iq_content" not in st.session_state: st.session_state.iq_content = ""
 if "iq_config"   not in st.session_state: st.session_state.iq_config  = {}
 
 if generate_btn:
+    # Gate 1: basic sanitisation
     valid, err = validate_input(selected_subject, topic, selected_class)
     if not valid:
         st.error(f"❌ {err}")
         log_usage("Important Questions", selected_subject, topic,
                   valid_input=False, ai_called=False, response_valid=False)
     else:
-        if not check_rate_limit():
-            st.stop()
-        st.session_state.iq_config  = {"class": selected_class, "subject": selected_subject,
-                                        "topic": topic, "type": q_type, "medium": medium}
-        st.session_state.iq_content = ""
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Class", selected_class)
-        col2.metric("Subject", selected_subject)
-        col3.metric("Type", q_type.split("(")[0].strip())
-        st.markdown(f"**Topic:** {topic} | **Medium:** {medium}")
-        st.divider()
-        placeholder = st.empty()
-        full_text   = ""
-        response_valid = True
-        try:
-            with st.spinner("Important questions dhundhe ja rahe hain..."):
-                for chunk in stream_content(
-                    cls=selected_class, subject=selected_subject,
-                    topic=topic, medium=medium, feature="Important Questions",
-                    extra={"q_type": q_type,
-                           "type_instruction": _Q_INSTRUCTIONS.get(q_type, "")},
-                    max_tokens=1200,
-                ):
-                    full_text += chunk
-                    placeholder.markdown(full_text + "▌")
-            placeholder.markdown(full_text)
+        # Gate 2: topic-domain relevance (blocks e.g. Sanskrit + quadratic equation)
+        rel_ok, rel_err = check_topic_relevance(selected_subject, topic)
+        if not rel_ok:
+            st.error(f"❌ {rel_err}")
+            log_usage("Important Questions", selected_subject, topic,
+                      valid_input=False, ai_called=False, response_valid=False)
+        elif not check_rate_limit():
+            pass
+        else:
+            st.session_state.iq_config  = {"class": selected_class, "subject": selected_subject,
+                                            "topic": topic, "type": q_type, "medium": medium}
+            st.session_state.iq_content = ""
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Class", selected_class)
+            col2.metric("Subject", selected_subject)
+            col3.metric("Type", q_type.split("(")[0].strip())
+            st.markdown(f"**Topic:** {topic} | **Medium:** {medium}")
+            st.divider()
+            placeholder = st.empty()
+            full_text   = ""
+            response_valid = True
+            try:
+                with st.spinner("Important questions dhundhe ja rahe hain..."):
+                    for chunk in stream_content(
+                        cls=selected_class, subject=selected_subject,
+                        topic=topic, medium=medium, feature="Important Questions",
+                        extra={"q_type": q_type,
+                               "type_instruction": _Q_INSTRUCTIONS.get(q_type, "")},
+                        max_tokens=1200,
+                    ):
+                        full_text += chunk
+                        placeholder.markdown(full_text + "▌")
+                placeholder.markdown(full_text)
 
-            clean, warn = check_response_contamination(selected_subject, full_text)
-            if not clean:
+                clean, warn = check_response_contamination(selected_subject, full_text)
+                if not clean:
+                    response_valid = False
+                    st.warning(f"⚠️ {warn}")
+            except Exception as e:
+                show_api_error(e)
                 response_valid = False
-                st.warning(f"⚠️ {warn}")
-        except Exception as e:
-            show_api_error(e)
-            response_valid = False
-            st.stop()
+                st.stop()
 
-        st.session_state.iq_content = full_text
-        log_usage("Important Questions", selected_subject, topic,
-                  valid_input=True, ai_called=True, response_valid=response_valid)
-        show_disclaimer()
-        st.divider()
-        col1, col2 = st.columns(2)
-        col1.success("✅ Questions ready!")
-        col2.download_button("⬇️ Download (.txt)", data=full_text,
-                             file_name=f"{selected_class}_{selected_subject}_{topic}_questions.txt",
-                             mime="text/plain", use_container_width=True)
+            st.session_state.iq_content = full_text
+            log_usage("Important Questions", selected_subject, topic,
+                      valid_input=True, ai_called=True, response_valid=response_valid)
+            show_disclaimer()
+            st.divider()
+            col1, col2 = st.columns(2)
+            col1.success("✅ Questions ready!")
+            col2.download_button("⬇️ Download (.txt)", data=full_text,
+                                 file_name=f"{selected_class}_{selected_subject}_{topic}_questions.txt",
+                                 mime="text/plain", use_container_width=True)
 
 elif st.session_state.iq_content:
     cfg = st.session_state.iq_config

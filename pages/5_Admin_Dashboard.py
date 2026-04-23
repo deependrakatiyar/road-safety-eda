@@ -74,6 +74,8 @@ with st.sidebar:
         d_from, d_to = default_from, date.today()
 
     st.divider()
+    show_all = st.checkbox("📊 Show All Data (ignore date filter)", value=False)
+    st.divider()
     if st.button("🔄 Refresh Data", use_container_width=True):
         st.rerun()
     if st.button("🚪 Logout", use_container_width=True):
@@ -111,8 +113,12 @@ def filter_df(df):
     mask = (df["created_at"].dt.date >= d_from) & (df["created_at"].dt.date <= d_to)
     return df[mask]
 
-reg_df   = filter_df(reg_df_all)
-usage_df = filter_df(usage_df_all)
+if show_all:
+    reg_df   = reg_df_all
+    usage_df = usage_df_all
+else:
+    reg_df   = filter_df(reg_df_all)
+    usage_df = filter_df(usage_df_all)
 
 # ── KPI cards ─────────────────────────────────────────────────────────────────
 
@@ -313,6 +319,26 @@ if st.button("Run Test (inserts 1 dummy row in each table)", use_container_width
         if rows:
             st.dataframe(pd.DataFrame(rows)[["created_at","name","class","school_name","district"]],
                          hide_index=True, use_container_width=True)
+
+# ── Raw data debug ───────────────────────────────────────────────────────────
+
+st.divider()
+with st.expander("🐞 Raw Supabase Data — Debug View"):
+    st.caption("Direct fetch bypassing DataFrame parsing and date filter. "
+               "If rows appear here but not in the dashboard, the issue is in parsing/filtering.")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown(f"**registrations** — {len(regs)} rows fetched")
+        if regs:
+            st.dataframe(pd.DataFrame(regs), use_container_width=True, hide_index=True)
+        else:
+            st.warning("0 rows. Check SUPABASE_URL and SUPABASE_KEY in Streamlit Secrets.")
+    with col_b:
+        st.markdown(f"**usage_logs** — {len(usage)} rows fetched")
+        if usage:
+            st.dataframe(pd.DataFrame(usage), use_container_width=True, hide_index=True)
+        else:
+            st.warning("0 rows. Check secrets, then click 'Run Connection Test' above.")
 
 st.markdown("""
 <div style="text-align:center;padding:14px 0 8px;color:#777;

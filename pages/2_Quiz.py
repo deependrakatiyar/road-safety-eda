@@ -3,7 +3,8 @@ import json
 from utils import (require_api_key, show_api_error, ensure_registered,
                    log_usage, show_gov_banner, show_gov_footer,
                    check_rate_limit, show_disclaimer)
-from validation import CLASSES, SUBJECTS, validate_input, check_response_contamination
+from validation import (CLASSES, SUBJECTS, validate_input,
+                        check_topic_relevance, check_response_contamination)
 from ai_engine import generate_json
 
 st.set_page_config(page_title="Quiz Practice - Padhai AI", page_icon="❓", layout="wide")
@@ -49,44 +50,50 @@ if "quiz_submitted" not in st.session_state: st.session_state.quiz_submitted = F
 if "quiz_config"    not in st.session_state: st.session_state.quiz_config    = {}
 
 if generate_btn:
-    # Validate before calling AI
+    # Gate 1: basic sanitisation
     valid, err = validate_input(selected_subject, topic, selected_class)
     if not valid:
         st.error(f"❌ {err}")
         log_usage("Quiz", selected_subject, topic,
                   valid_input=False, ai_called=False, response_valid=False)
     else:
-        if not check_rate_limit():
-            st.stop()
-        with st.spinner(f"Quiz generate ho raha hai... {selected_class} | {selected_subject} | {topic}"):
-            response_valid = True
-            try:
-                raw = generate_json(
-                    cls=selected_class, subject=selected_subject,
-                    topic=topic, medium=medium,
-                    extra={"n": num_questions, "difficulty": difficulty},
-                )
-                # Contamination check on raw JSON text
-                clean, warn = check_response_contamination(selected_subject, raw)
-                if not clean:
-                    response_valid = False
-                    st.warning(f"⚠️ {warn}")
+        # Gate 2: topic must belong to the selected subject
+        rel_ok, rel_err = check_topic_relevance(selected_subject, topic)
+        if not rel_ok:
+            st.error(f"❌ {rel_err}")
+            log_usage("Quiz", selected_subject, topic,
+                      valid_input=False, ai_called=False, response_valid=False)
+        elif not check_rate_limit():
+            pass
+        else:
+            with st.spinner(f"Quiz generate ho raha hai... {selected_class} | {selected_subject} | {topic}"):
+                response_valid = True
+                try:
+                    raw = generate_json(
+                        cls=selected_class, subject=selected_subject,
+                        topic=topic, medium=medium,
+                        extra={"n": num_questions, "difficulty": difficulty},
+                    )
+                    clean, warn = check_response_contamination(selected_subject, raw)
+                    if not clean:
+                        response_valid = False
+                        st.warning(f"⚠️ {warn}")
 
-                questions = _parse_quiz(raw)
-                st.session_state.quiz_questions = questions
-                st.session_state.quiz_answers   = {}
-                st.session_state.quiz_submitted = False
-                st.session_state.quiz_config    = {
-                    "class": selected_class, "subject": selected_subject,
-                    "topic": topic, "difficulty": difficulty, "medium": medium,
-                }
-                log_usage("Quiz", selected_subject, topic,
-                          valid_input=True, ai_called=True, response_valid=response_valid)
-                st.rerun()
-            except Exception as e:
-                show_api_error(e)
-                log_usage("Quiz", selected_subject, topic,
-                          valid_input=True, ai_called=True, response_valid=False)
+                    questions = _parse_quiz(raw)
+                    st.session_state.quiz_questions = questions
+                    st.session_state.quiz_answers   = {}
+                    st.session_state.quiz_submitted = False
+                    st.session_state.quiz_config    = {
+                        "class": selected_class, "subject": selected_subject,
+                        "topic": topic, "difficulty": difficulty, "medium": medium,
+                    }
+                    log_usage("Quiz", selected_subject, topic,
+                              valid_input=True, ai_called=True, response_valid=response_valid)
+                    st.rerun()
+                except Exception as e:
+                    show_api_error(e)
+                    log_usage("Quiz", selected_subject, topic,
+                              valid_input=True, ai_called=True, response_valid=False)
 
 if st.session_state.quiz_questions:
     cfg = st.session_state.quiz_config

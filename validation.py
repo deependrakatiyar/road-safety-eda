@@ -60,6 +60,67 @@ _CROSS_SIGNALS: dict = {
 
 _UNSAFE = re.compile(r'[<>{};|`$\\]')
 
+# Keywords that, if found in a TOPIC STRING, signal the topic belongs to a
+# different subject. Hard-block before calling the AI (1 hit = blocked).
+_TOPIC_CROSS_SIGNALS: dict = {
+    "Hindi":            ["quadratic equation", "chemical formula", "photosynthesis",
+                         "trigonometry", "newton's law", "mitosis", "periodic table",
+                         "cell division", "atom structure"],
+    "English":          ["quadratic equation", "chemical formula", "photosynthesis",
+                         "trigonometry", "newton's law", "mitosis", "periodic table",
+                         "cell division"],
+    "Sanskrit":         ["quadratic", "chemical formula", "photosynthesis",
+                         "trigonometry", "newton", "mitosis", "atom",
+                         "democracy", "parliament", "election commission"],
+    "Mathematics":      ["photosynthesis", "mughal empire", "french revolution",
+                         "cell division", "mitosis", "animal kingdom",
+                         "democracy act", "parliament act"],
+    "Science":          ["quadratic equation", "mughal empire", "french revolution",
+                         "parliament act", "democracy", "poem recital"],
+    "Physics":          ["mughal empire", "french revolution", "cell division",
+                         "photosynthesis", "mitosis", "democracy act"],
+    "Chemistry":        ["mughal empire", "french revolution", "cell division",
+                         "photosynthesis", "mitosis", "democracy act"],
+    "Biology":          ["quadratic equation", "mughal empire", "french revolution",
+                         "democracy act", "parliament act"],
+    "History":          ["quadratic equation", "photosynthesis", "trigonometry formula",
+                         "chemical formula", "cell membrane"],
+    "Geography":        ["quadratic equation", "photosynthesis", "trigonometry formula",
+                         "chemical formula"],
+    "Political Science":["quadratic equation", "photosynthesis", "trigonometry formula",
+                         "chemical formula"],
+    "Economics":        ["photosynthesis", "trigonometry formula", "chemical formula",
+                         "mitosis", "cell division"],
+    "Social Science":   ["quadratic equation", "trigonometry formula", "chemical formula",
+                         "photosynthesis", "mitosis"],
+    "Computer Science": ["photosynthesis", "mughal empire", "french revolution",
+                         "cell division", "trigonometry formula"],
+    "Business Studies": ["photosynthesis", "cell division", "trigonometry formula",
+                         "quadratic equation"],
+    "Accountancy":      ["photosynthesis", "cell division", "mughal empire",
+                         "trigonometry formula"],
+}
+
+
+def check_topic_relevance(subject: str, topic: str) -> tuple:
+    """
+    Hard block: returns (False, error_msg) if topic contains keywords that
+    clearly belong to a different subject domain.
+    One hit is enough — these are unambiguous cross-domain terms.
+    """
+    signals = _TOPIC_CROSS_SIGNALS.get(subject, [])
+    if not signals:
+        return True, None
+
+    topic_lower = topic.lower()
+    hits = [kw for kw in signals if kw in topic_lower]
+    if hits:
+        return False, (
+            f"Topic '{topic}' {subject} ke syllabus mein nahi aata. "
+            f"Detected: '{hits[0]}'. Kripya sahi {subject} chapter/topic likhein."
+        )
+    return True, None
+
 
 def validate_input(subject: str, topic: str, cls: str = "",
                    max_len: int = 200) -> tuple:

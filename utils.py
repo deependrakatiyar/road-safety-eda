@@ -94,12 +94,20 @@ def _sb_headers() -> dict:
 def _sb_base() -> str:
     return _secret("SUPABASE_URL").rstrip("/")
 
+_AUDIT_COLS = frozenset({"valid_input", "ai_called", "response_valid"})
+
 def _sb_post(table: str, data: dict):
     if _req is None or not _sb_base() or not _secret("SUPABASE_KEY"):
         return
     try:
-        _req.post(f"{_sb_base()}/rest/v1/{table}",
-                  headers=_sb_headers(), json=data, timeout=4)
+        r = _req.post(f"{_sb_base()}/rest/v1/{table}",
+                      headers=_sb_headers(), json=data, timeout=4)
+        if r.status_code in (400, 422):
+            # Audit columns may not exist yet — retry with core fields only
+            core = {k: v for k, v in data.items() if k not in _AUDIT_COLS}
+            if core != data:
+                _req.post(f"{_sb_base()}/rest/v1/{table}",
+                          headers=_sb_headers(), json=core, timeout=4)
     except Exception:
         pass
 
