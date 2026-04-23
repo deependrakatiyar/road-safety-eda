@@ -105,7 +105,7 @@ with st.sidebar:
     st.divider()
     st.caption(f"DB: {len(regs)} registrations, {len(usage)} usage logs fetched")
     if not regs and not usage:
-        st.warning("⚠️ Supabase returned 0 rows. Check secrets + Run Connection Test below.")
+        st.warning("⚠️ Supabase returned 0 rows. If RLS is enabled, add SUPABASE_SERVICE_KEY to secrets.")
 
 def filter_df(df):
     if df.empty:
@@ -326,13 +326,21 @@ st.divider()
 with st.expander("🐞 Raw Supabase Data — Debug View"):
     st.caption("Direct fetch bypassing DataFrame parsing and date filter. "
                "If rows appear here but not in the dashboard, the issue is in parsing/filtering.")
+
+    # Show any Supabase read error surfaced by _sb_get
+    sb_err = st.session_state.pop("_sb_read_error", None)
+    if sb_err:
+        st.error(f"🔴 Supabase read error: {sb_err}")
+        st.info("If you see a 401/403 here, add `SUPABASE_SERVICE_KEY` to Streamlit Secrets "
+                "(Supabase Dashboard → Settings → API → service_role key).")
+
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown(f"**registrations** — {len(regs)} rows fetched")
         if regs:
             st.dataframe(pd.DataFrame(regs), use_container_width=True, hide_index=True)
         else:
-            st.warning("0 rows. Check SUPABASE_URL and SUPABASE_KEY in Streamlit Secrets.")
+            st.warning("0 rows. Check SUPABASE_URL, SUPABASE_KEY (and SUPABASE_SERVICE_KEY if RLS is on).")
     with col_b:
         st.markdown(f"**usage_logs** — {len(usage)} rows fetched")
         if usage:

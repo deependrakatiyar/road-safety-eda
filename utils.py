@@ -112,15 +112,39 @@ def _sb_post(table: str, data: dict):
         pass
 
 def _sb_get(table: str, select: str = "*", order: str = "created_at.desc", limit: int = 5000):
-    if _req is None or not _sb_base() or not _secret("SUPABASE_KEY"):
+    if _req is None:
+        return []
+    base = _sb_base()
+    if not base:
+        return []
+    # Prefer service role key for reads — bypasses RLS so admin dashboard always works.
+    # Students still write with the anon key (SUPABASE_KEY) via _sb_post.
+    key = _secret("SUPABASE_SERVICE_KEY") or _secret("SUPABASE_KEY")
+    if not key:
         return []
     try:
-        r = _req.get(f"{_sb_base()}/rest/v1/{table}",
-                     headers={**_sb_headers(), "Prefer": ""},
-                     params={"select": select, "order": order, "limit": limit},
-                     timeout=6)
-        return r.json() if r.status_code == 200 else []
-    except Exception:
+        r = _req.get(
+            f"{base}/rest/v1/{table}",
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            params={"select": select, "order": order, "limit": limit},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            return data if isinstance(data, list) else []
+        # Surface the real error so the dashboard can display it
+        try:
+            st.session_state["_sb_read_error"] = (
+                f"HTTP {r.status_code} on {table}: {r.text[:300]}"
+            )
+        except Exception:
+            pass
+        return []
+    except Exception as exc:
+        try:
+            st.session_state["_sb_read_error"] = f"{type(exc).__name__}: {exc}"
+        except Exception:
+            pass
         return []
 
 # ── AI Disclaimer ─────────────────────────────────────────────────────────────
